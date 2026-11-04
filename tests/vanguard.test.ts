@@ -115,6 +115,13 @@ describe('parseProductPage refuses', () => {
     );
   });
 
+  it('a page whose state already has the next day’s NAV while its table still ends a day earlier (seen live, 2026-11-05)', () => {
+    // Vanguard served US 500 with the state at 2026-11-04 604.4114 and the table still at 2026-11-03: fail closed.
+    const ahead = us500().replaceAll('"asOfDate":"2026-11-03","currencyCode":"EUR","price":597.1246', '"asOfDate":"2026-11-04","currencyCode":"EUR","price":604.4114');
+    expect(ahead).not.toBe(us500());
+    expect(refusal(ahead, US500)).toBe("the price table's newest row (2026-11-03 597.1246) is not the page's latest NAV (2026-11-04 604.4114)");
+  });
+
   it('a latest NAV in another currency', () => {
     expect(refusal(us500().replaceAll('"currencyCode":"EUR"', '"currencyCode":"GBP"'), US500)).toBe('the latest NAV is in "GBP", not EUR');
   });
