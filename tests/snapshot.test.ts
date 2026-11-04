@@ -1,7 +1,11 @@
 // The snapshot: the checks on a fund's bars, the merge with the previous file (fail closed, keep
 // what we had), its text, and the whole run with `fetch` replaced by a stub (tests/setup.ts makes
 // the real one throw).
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { chartUrl, run, USER_AGENT } from '../scripts/build-snapshots.ts';
 import type { Fund } from '../src/lib/portfolio.ts';
@@ -316,5 +320,82 @@ describe('run, with fetch stubbed', () => {
     stubFetch((symbol) => (symbol === '0P00011HBQ.F' ? new Response('', { status: 500 }) : healthy(symbol)));
     const outcome = await run(funds, null, () => NOW, quiet);
     expect(outcome).toEqual({ write: false, error: 'no previous snapshot to keep, and emerging failed (emerging: HTTP 500)' });
+  });
+});
+
+// --- `npm run snapshots` as a process (verifier, T-003) -------------------------------------------
+// The real script in a scratch copy of the repo, Yahoo answered by tests/fixtures/stub-yahoo-fetch.mjs:
+// what Alfredo (or a scheduled job) sees is the exit code, the printed lines and the file on disk.
+
+describe('npm run snapshots, as a process', () => {
+  const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const stub = path.join(repo, 'tests', 'fixtures', 'stub-yahoo-fetch.mjs');
+  let dir = '';
+  const file = () => path.join(dir, 'public', 'data', 'prices.json');
+  const text = () => readFileSync(file(), 'utf8');
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'snapshots-'));
+    for (const d of ['scripts', 'src', 'data']) cpSync(path.join(repo, d), path.join(dir, d), { recursive: true });
+    cpSync(path.join(repo, 'package.json'), path.join(dir, 'package.json'));
+    mkdirSync(path.join(dir, 'public', 'data'), { recursive: true });
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const snapshots = (mode: string) =>
+    spawnSync('node', ['--import', stub, 'scripts/build-snapshots.ts'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, STUB_YAHOO: mode },
+    });
+
+  it('first run: one line per fund, a summary, exit 0, an ok file with every fund', () => {
+    const r = snapshots('healthy');
+    expect(r.status).toBe(0);
+    const lines = r.stdout.trim().split('\n');
+    expect(lines).toHaveLength(catalogue.length + 1);
+    expect(lines[0]).toMatch(/^us500 +0P00011HBK\.F +\d+ bars +2026-05-04 … 2026-11-03$/);
+    expect(lines.at(-1)).toBe(`Wrote public/data/prices.json: state ok, ${catalogue.length} funds, latest NAV 2026-11-03.`);
+    const s = parseSnapshot(text());
+    expect(s).toMatchObject({ state: 'ok', source: { name: 'Yahoo Finance (unofficial)', kind: 'yahoo' } });
+    expect(Object.keys(s.funds)).toEqual(catalogue.map((f) => f.id));
+    expect(s.funds.us500!.bars.at(-1)![0]).toBe('2026-11-03'); // the trailing all-null bar is not a NAV
+  });
+
+  it('a second run changes only the generatedAt line', () => {
+    snapshots('healthy');
+    const one = text();
+    expect(snapshots('healthy').status).toBe(0);
+    expect(diffLines(one, text()).filter((l) => !/"generatedAt"/.test(l))).toEqual([]);
+  });
+
+  it('one symbol unknown: exit 0, state partial, that fund keeps its bars and says why', () => {
+    snapshots('healthy');
+    const before = parseSnapshot(text());
+    const r = snapshots('bad:0P00011HBL.F');
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/europe +0P00011HBL\.F +FAILED: HTTP 404: .*Not Found.* \(kept \d+ previous bars\)/);
+    const s = parseSnapshot(text());
+    expect(s.state).toBe('partial');
+    expect(s.funds.europe).toEqual({ ...before.funds.europe, kept: true, error: expect.stringContaining('HTTP 404') });
+    expect(s.funds.us500).toEqual(before.funds.us500);
+  });
+
+  it('the source down for every fund: exit 1, previous bars written back, state failed', () => {
+    snapshots('healthy');
+    const before = parseSnapshot(text());
+    const r = snapshots('down');
+    expect(r.status).toBe(1);
+    const s = parseSnapshot(text());
+    expect(s).toEqual({ ...before, generatedAt: expect.any(String), state: 'failed', error: expect.stringContaining('ECONNREFUSED') });
+    expect(s.funds).toEqual(before.funds);
+  });
+
+  it('no previous file and the source down: exit 1 and no file is created', () => {
+    const r = snapshots('down');
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/snapshot failed: no previous snapshot to keep/);
+    expect(r.stdout).toMatch(/was not written\./);
+    expect(() => readFileSync(file())).toThrow(/ENOENT/);
   });
 });
