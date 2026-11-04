@@ -1,0 +1,14 @@
+{
+  "anchorDate": "2026-11-04",
+  "sourceFile": "distribucion_agregada_cartera.xlsx",
+  "positions": [
+    { "fund": "us500", "weight": 0.3983588675690416 },
+    { "fund": "europe", "weight": 0.24799196787148595 },
+    { "fund": "emerging", "weight": 0.09299543854430066 },
+    { "fund": "smallcap", "weight": 0.090423422083395308 },
+    { "fund": "japan", "weight": 0.073609251822103233 },
+    { "fund": "eurogov", "weight": 0.041660469036640391 },
+    { "fund": "eurocorp", "weight": 0.029537904705240717 },
+    { "fund": "euroinfl", "weight": 0.025422678367792155 }
+  ]
+}
