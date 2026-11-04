@@ -43,8 +43,8 @@ The badge reads `NAV as of <date> · snapshot <time> · <state>`; tap or hover i
 - `FRESH`: the newest price is no more than two weekdays old, which is normal given the one-day publication delay.
 - `STALE`: older than that; the snapshot has not been rebuilt, or the sources stopped publishing.
 - `PARTIAL`: some funds lack a price the others have, so the newest date or a day in the last two months is skipped.
-- `ERROR`: the price file could not be read, so there are no returns; the allocation still shows.
-- `run partial` / `run failed`: the last `npm run snapshots` could not refresh some funds (they keep their previous prices), or any of them (the whole previous file is shown).
+- `ERROR`: the price file could not be read, or a fund has no prices in it, so there are no returns; the allocation still shows.
+- `run partial` / `run failed`: the last `npm run snapshots` could not refresh some funds (they keep their previous prices), or all of them (the whole previous file is shown).
 
 To check any number on the page, `node scripts/recompute.ts` prints what the page should show, worked out from the two data files with the same code the page uses. The exact definitions are in [docs/SPEC.md, "Exact definitions"](docs/SPEC.md#exact-definitions).
 
