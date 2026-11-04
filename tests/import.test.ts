@@ -1,4 +1,8 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import funds from '../data/funds.json' with { type: 'json' };
 import type { Fund } from '../src/lib/portfolio.ts';
@@ -191,5 +195,37 @@ describe('the catalogue the import matches against', () => {
     expect(fund.isin && validIsin(fund.isin)).toBe(true);
     expect(fund.sources.yahoo).toMatch(/^0P[0-9A-Z]{8}\.F$/);
     expect(catalogue.filter((f) => f.name === fund.name || f.isin === fund.isin)).toHaveLength(1);
+  });
+});
+
+describe('the real command, run as a process', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const portfolioFile = path.join(root, 'data', 'portfolio.json');
+  const sheet = part('sheet1.xml');
+  const doctored: [string, Record<string, string>, RegExp][] = [
+    ['a fund not in the catalogue', { 'xl/sharedStrings.xml': part('sharedStrings.xml').replace('US 500 Stock Index Euro', 'US 500 Stock Index USD') }, /row 2: the fund .* is not in data\/funds\.json/],
+    ['weights that do not sum to 1', { 'xl/worksheets/sheet1.xml': sheet.replace('<v>0.3983588675690416</v>', '<v>0.39</v>') }, /rows 2–9: the weights sum to/],
+    ['a negative weight', { 'xl/worksheets/sheet1.xml': sheet.replace('<v>0.3983588675690416</v>', '<v>-0.3983588675690416</v>') }, /row 2 .*negative/],
+    ['an empty weight cell', { 'xl/worksheets/sheet1.xml': sheet.replace('<c r="C3" s="3"><v>0.24799196787148595</v></c>', '<c r="C3" s="3"/>') }, /row 3 .*weight is missing/],
+    ['a weight that is text', { 'xl/worksheets/sheet1.xml': sheet.replace('<c r="C3" s="3"><v>0.24799196787148595</v></c>', '<c r="C3" t="inlineStr"><is><t>abc</t></is></c>') }, /row 3 .*not a number/],
+    ['a weight written NaN', { 'xl/worksheets/sheet1.xml': sheet.replace('<v>0.24799196787148595</v>', '<v>NaN</v>') }, /not a number/],
+    ['a weight too large for a number', { 'xl/worksheets/sheet1.xml': sheet.replace('<v>0.24799196787148595</v>', '<v>1e999</v>') }, /row 3 .*not a number/],
+    ['the total row counted as a fund', { 'xl/worksheets/sheet1.xml': sheet.replace('<c r="B11" s="5"/>', '<c r="B11" s="5" t="s"><v>19</v></c>') }, /row 11: "Total cartera invertida" is the export's total row/],
+  ];
+
+  it.each(doctored)('refuses %s: exit 1, a message naming the row, portfolio.json untouched', (_name, overrides, message) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'import-'));
+    try {
+      const file = path.join(dir, 'distribucion_agregada_cartera.xlsx');
+      writeFileSync(file, exportWorkbook(overrides));
+      const before = readFileSync(portfolioFile);
+      const r = spawnSync('node', ['scripts/import-portfolio.ts', file], { cwd: root, encoding: 'utf8' });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/^import refused: /);
+      expect(r.stderr).toMatch(message);
+      expect(readFileSync(portfolioFile).equals(before)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
