@@ -12,9 +12,17 @@ let outside: string[] = [];
 let errors: string[] = [];
 const FIXTURE = readFileSync(path.join(import.meta.dirname, 'fixtures', 'prices.json'), 'utf8');
 
+const LAGGING = readFileSync(path.join(import.meta.dirname, 'fixtures', 'prices-lagging.json'), 'utf8');
+
 type Snapshot = 'fixture' | 'missing' | 'unreadable' | 'http500' | ((text: string) => string);
 
-async function open(page: Page, snapshot: Snapshot = 'fixture'): Promise<void> {
+// The viewer is in Madrid, and the clock is the page's only one (src/main.ts): Wednesday 2026-11-04,
+// noon in Madrid, unless a test says otherwise. The fixture's L is Tuesday 2026-11-03, so it is FRESH then.
+test.use({ timezoneId: 'Europe/Madrid' });
+const WEDNESDAY = '2026-11-04T11:00:00Z';
+
+async function open(page: Page, snapshot: Snapshot = 'fixture', now: string = WEDNESDAY): Promise<void> {
+  await page.clock.setFixedTime(new Date(now));
   await page.route('**/data/prices.json', (route) => {
     if (snapshot === 'missing') return route.fulfill({ status: 404, body: 'Not Found' });
     if (snapshot === 'http500') return route.fulfill({ status: 500, body: 'boom' });
@@ -24,8 +32,13 @@ async function open(page: Page, snapshot: Snapshot = 'fixture'): Promise<void> {
   });
   await page.goto('/');
   await expect(page.locator('#app > *').first()).toBeVisible();
+  // The page renders at once and again when the snapshot has answered: wait for the second.
+  await expect(page.locator('.badge')).not.toHaveAttribute('data-state', 'loading');
   expect(errors, 'errors thrown on the page').toEqual([]);
 }
+
+/** The fixture with us500's lone 2026-10-26 taken out, so no date is dropped from the series: neither PARTIAL nor any return changes. */
+const WITHOUT_DROPPED = (text: string): string => mutate(text, (s) => (s.funds.us500!.bars = s.funds.us500!.bars.filter(([d]) => d !== '2026-10-26')));
 
 test.beforeEach(async ({ page, baseURL }) => {
   outside = [];
@@ -70,7 +83,9 @@ const TILES = [
 
 test('the tiles and the table show the returns computed by hand from the fixture', async ({ page }, testInfo) => {
   await open(page);
-  await expect(page.locator('.badge')).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC');
+  // us500 alone has 2026-10-26, so the series drops it inside the 2m window: PARTIAL (the badge's own tests below).
+  await expect(page.locator('.badge')).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH · PARTIAL');
+  await expect(page.locator('footer')).toContainText('Prices: fund NAVs from Yahoo Finance (unofficial), snapshot of 2026-11-04 06:30 UTC');
 
   const performance = page.getByRole('region', { name: 'Performance' });
   await expect(performance.locator('.tile')).toHaveCount(5);
@@ -453,4 +468,173 @@ test('the full name opens from the keyboard, and data-theme overrides the system
   }
   await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
   expect(await bg()).toBe(system);
+});
+
+/*
+ * The badge's states (SPEC "Freshness states"), against a faked clock in Madrid. L = Tuesday 2026-11-03.
+ * FRESH from Wednesday to Thursday (two weekdays back reaches Tuesday), STALE from Friday (it reaches Wednesday).
+ */
+test.describe('the freshness badge', () => {
+  /** The computed colour of a CSS colour expression, and of the badge's state words and dot. */
+  async function colours(page: Page) {
+    return page.evaluate(() => {
+      const probe = (value: string) => {
+        const el = document.createElement('span');
+        el.style.color = value;
+        document.body.append(el);
+        const c = getComputedStyle(el).color;
+        el.remove();
+        return c;
+      };
+      const states = document.querySelector('.badge-states');
+      return {
+        ok: probe('var(--ok)'),
+        warn: probe('var(--warn)'),
+        error: probe('var(--error)'),
+        states: states ? getComputedStyle(states).color : null,
+        dot: getComputedStyle(document.querySelector('.badge-dot')!).backgroundColor,
+      };
+    });
+  }
+
+  for (const [day, now, state] of [
+    ['Wednesday', WEDNESDAY, 'FRESH'],
+    ['Thursday', '2026-11-05T11:00:00Z', 'FRESH'],
+    ['Friday', '2026-11-06T11:00:00Z', 'STALE'],
+  ] as const) {
+    test(`on ${day} the fixture's NAV of Tuesday is ${state}, and the numbers still show`, async ({ page }, testInfo) => {
+      await open(page, WITHOUT_DROPPED, now);
+      const badge = page.locator('.badge');
+      await expect(badge).toHaveText(`NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · ${state}`);
+      await expect(badge).toHaveAttribute('data-tone', state === 'FRESH' ? 'ok' : 'warn');
+      const c = await colours(page);
+      expect(c.states).toBe(state === 'FRESH' ? c.ok : c.warn);
+      expect(c.dot).toBe(c.states);
+      // Numbers under STALE as under FRESH.
+      await expect(page.locator('.tile[data-window="2m"] .tile-value')).toHaveText('+8.49 %');
+      await expect(page.locator('.chart-line')).toBeVisible();
+      await expect(page.locator('tr[data-fund="us500"] .ret[data-window="1d"]')).toHaveText('−0.90 %');
+      if (process.env.EVIDENCE_DIR) {
+        await page.locator('header').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-badge-${state.toLowerCase()}.png`) });
+      }
+    });
+  }
+
+  test('opens its detail on a tap or click: source, snapshot time in UTC and in the viewer’s time', async ({ page }, testInfo) => {
+    await open(page, WITHOUT_DROPPED);
+    const badge = page.locator('.badge');
+    const detail = page.locator('.badge-detail');
+    await expect(badge).toHaveAttribute('title', /Source: Yahoo Finance \(unofficial\)/); // the hover tooltip
+    await expect(detail).toBeHidden();
+    await badge.click();
+    await expect(badge).toHaveAttribute('aria-expanded', 'true');
+    await expect(detail).toBeVisible();
+    await expect(detail.locator('li')).toHaveText([
+      'Source: Yahoo Finance (unofficial)',
+      'Snapshot built 2026-11-04 06:30 UTC (2026-11-04 07:30 CET your time)',
+      'FRESH: the latest NAV is of 2026-11-03; on 2026-11-04, a NAV from 2026-11-02 on is fresh (two weekdays back).',
+    ]);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    if (process.env.EVIDENCE_DIR) {
+      await page.locator('header').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-badge-open.png`) });
+    }
+    await badge.press('Enter');
+    await expect(detail).toBeHidden();
+  });
+
+  test('is PARTIAL with a fund missing its latest date, and lists each fund’s', async ({ page }, testInfo) => {
+    await open(page, () => LAGGING);
+    const badge = page.locator('.badge');
+    await expect(badge).toHaveText('NAV as of 2026-11-02 · snapshot 2026-11-04 06:30 UTC · FRESH · PARTIAL');
+    await expect(badge).toHaveAttribute('data-tone', 'warn');
+    await badge.click();
+    const detail = page.locator('.badge-detail');
+    await expect(detail).toContainText("PARTIAL: the funds' latest NAVs differ, so the portfolio's is held back to 2026-11-02 by the fund that lags.");
+    await expect(detail.locator('li', { hasText: 'Japan Stock: ' })).toHaveText('Japan Stock: 2026-11-02 (behind)');
+    await expect(detail.locator('li', { hasText: 'US 500: ' })).toHaveText('US 500: 2026-11-03');
+    await expect(page.locator('.tile[data-window="1d"] time')).toHaveText('2026-10-30'); // the numbers show, up to L
+    if (process.env.EVIDENCE_DIR) {
+      await page.locator('header').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-badge-partial.png`) });
+    }
+  });
+
+  test('is PARTIAL on the fixture as it is, naming the date the series dropped', async ({ page }) => {
+    await open(page);
+    await page.locator('.badge').click();
+    await expect(page.locator('.badge-detail')).toContainText("PARTIAL: 2026-10-26 is missing for some funds, so the portfolio's line and returns skip it.");
+  });
+
+  test('shows the snapshot run’s own state and error when it failed', async ({ page }) => {
+    await open(
+      page,
+      (t) => mutate(t, (s) => Object.assign(s, { state: 'failed', error: 'every fund failed: us500: HTTP 429' })),
+      '2026-11-06T11:00:00Z',
+    );
+    await expect(page.locator('.badge')).toContainText('· STALE');
+    await page.locator('.badge').click();
+    await expect(page.locator('.badge-detail')).toContainText('The last snapshot run failed, so these are the previous prices: every fund failed: us500: HTTP 429');
+  });
+
+  for (const snapshot of ['http500', 'unreadable'] as const) {
+    test(`is ERROR on ${snapshot === 'http500' ? 'an HTTP 500' : 'JSON that does not parse'}, with the reason and an error line in each performance section`, async ({ page }, testInfo) => {
+      await open(page, snapshot);
+      const badge = page.locator('.badge');
+      await expect(badge).toHaveText('Allocation as of 2026-11-04 · prices unreadable · ERROR');
+      await expect(badge).toHaveAttribute('data-tone', 'error');
+      const c = await colours(page);
+      expect(c.states).toBe(c.error);
+      await badge.click();
+      await expect(page.locator('.badge-detail li').first()).toHaveText(
+        snapshot === 'http500' ? 'ERROR: the snapshot answered HTTP 500' : /^ERROR: .*JSON/,
+      );
+      for (const name of ['Performance', 'Portfolio value, last two months']) {
+        await expect(page.getByRole('region', { name }).locator('.placeholder')).toContainText('could not be read');
+      }
+      await expect(page.getByRole('region', { name: 'Positions' }).locator('.section-note')).toContainText('could not be read');
+      await expect(page.getByRole('region', { name: 'Allocation' }).getByText('Equities 90.34 %')).toBeVisible();
+      await expect(page.locator('footer')).toContainText('Prices: the snapshot could not be read');
+      if (process.env.EVIDENCE_DIR) {
+        await page.locator('header').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-badge-error-${snapshot}.png`) });
+      }
+    });
+  }
+
+  test('a fund without bars is ERROR, and the badge still names the snapshot', async ({ page }) => {
+    await open(page, (t) => mutate(t, (s) => (s.funds.japan!.bars = [])));
+    await page.locator('.badge').click();
+    await expect(page.locator('.badge-detail li')).toHaveText([
+      'ERROR: fund japan has no bars',
+      'Source: Yahoo Finance (unofficial)',
+      'Snapshot built 2026-11-04 06:30 UTC (2026-11-04 07:30 CET your time)',
+      /^No returns are shown/,
+    ]);
+    await expect(page.locator('footer')).toContainText('Prices: the snapshot of 2026-11-04 06:30 UTC from Yahoo Finance (unofficial) could not be used');
+  });
+});
+
+test('the allocation shows before the snapshot answers, and the performance sections say prices are loading', async ({ page }, testInfo) => {
+  await page.clock.setFixedTime(new Date(WEDNESDAY));
+  let release!: () => void;
+  const answered = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/data/prices.json', async (route) => {
+    await answered;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: WITHOUT_DROPPED(FIXTURE) });
+  });
+  await page.goto('/');
+  const badge = page.locator('.badge');
+  await expect(badge).toHaveText('Allocation as of 2026-11-04 · loading prices…');
+  await expect(badge).toHaveAttribute('data-tone', 'none');
+  await expect(page.getByRole('region', { name: 'Allocation' }).getByText('Equities 90.34 %')).toBeVisible();
+  await expect(page.locator('tbody tr')).toHaveCount(8);
+  for (const name of ['Performance', 'Portfolio value, last two months']) {
+    await expect(page.getByRole('region', { name }).locator('.placeholder')).toHaveText('Loading prices…');
+  }
+  await expect(page.locator('footer')).toContainText('Prices: loading the snapshot…');
+  if (process.env.EVIDENCE_DIR) {
+    await page.screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-loading.png`), fullPage: true });
+  }
+  release();
+  await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+  await expect(page.locator('.tile')).toHaveCount(5);
 });

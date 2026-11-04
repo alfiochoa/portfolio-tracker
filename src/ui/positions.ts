@@ -128,7 +128,9 @@ export function renderPositions(
         ? `Tap a fund for its full name. Returns up to the NAV of ${prices.latest}; each window starts on the date under its tile.`
         : freshness.state === 'unreadable'
           ? 'Tap a fund for its full name. No returns: the price snapshot could not be read.'
-          : 'Tap a fund for its full name. Returns appear once prices are wired.',
+          : freshness.state === 'loading'
+            ? 'Tap a fund for its full name. Loading prices…'
+            : 'Tap a fund for its full name. Returns appear once prices are wired.',
     ),
   );
 }
