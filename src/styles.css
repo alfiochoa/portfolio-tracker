@@ -47,6 +47,11 @@
   --border: 1px;
   --focus-ring: 2px;
   --page-max: 60rem;
+  --line-weight: 2px; /* a chart's line */
+  --spark-weight: 1.5px;
+  --spark-w: 64px;
+  --spark-h: 20px;
+  --dash: 4 3; /* the 100 reference line, the one dashed rule */
   --gutter: var(--space-4);
 }
 
@@ -332,6 +337,15 @@ code {
   display: none;
 }
 
+/* A tablet: the table with its sparkline column needs the cells' side padding halved to fit 768 px. */
+
+@media (min-width: 40.0625rem) and (max-width: 56rem) {
+  .positions th,
+  .positions td {
+    padding-inline: var(--space-1);
+  }
+}
+
 /* Positions: one card per fund on a phone */
 
 @media (max-width: 40rem) {
@@ -390,9 +404,22 @@ code {
   }
 
   .positions td.class {
-    grid-column: 1 / -1;
+    grid-column: 1 / 4;
     grid-row: 2;
+    align-self: center;
     font-size: var(--text-xs);
+  }
+
+  .positions td.spark {
+    grid-column: 4 / 6;
+    grid-row: 2;
+    justify-self: end;
+    align-self: center;
+    width: auto;
+  }
+
+  .positions .total td.spark {
+    display: none;
   }
 
   .positions td.ret {
@@ -423,6 +450,127 @@ code {
   .fund-full {
     padding-bottom: var(--space-1);
   }
+}
+
+/* Chart: the value index, drawn at its own pixel width (src/ui/chart.ts) */
+
+.chart-readout {
+  min-height: calc(var(--text-md) * var(--leading));
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.chart-readout[data-state='active'] {
+  color: var(--fg);
+}
+
+.chart-readout-value {
+  font-size: var(--text-md);
+  font-weight: var(--weight-strong);
+}
+
+.chart-frame {
+  min-width: 0;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  border-radius: var(--radius);
+  touch-action: pan-y; /* a vertical swipe scrolls the page; a sideways drag reads along the line */
+  cursor: crosshair;
+}
+
+/* A tap focuses the chart (so the arrows work next); only the keyboard gets the ring. */
+.chart:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.chart-grid line,
+.chart-axis line {
+  stroke: var(--line);
+  stroke-width: var(--border);
+  shape-rendering: crispEdges;
+}
+
+.chart-hundred {
+  stroke: var(--muted);
+  stroke-width: var(--border);
+  stroke-dasharray: var(--dash);
+  shape-rendering: crispEdges;
+}
+
+.chart-label {
+  fill: var(--muted);
+  font-family: var(--font);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: var(--line-weight);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-end {
+  fill: var(--fg);
+  font-family: var(--font);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-end-dot,
+.chart-dot {
+  fill: var(--accent);
+  stroke: var(--bg);
+  stroke-width: var(--mark-gap);
+}
+
+.chart-cross {
+  stroke: var(--muted);
+  stroke-width: var(--border);
+  shape-rendering: crispEdges;
+}
+
+.chart-hit {
+  fill: transparent;
+}
+
+/* Sparklines: one per fund in the positions table, coloured by the fund's return over the window */
+
+.positions .spark {
+  width: var(--spark-w);
+  line-height: 0;
+}
+
+.sparkline {
+  display: block;
+  width: var(--spark-w);
+  height: var(--spark-h);
+  overflow: visible;
+}
+
+.sparkline path {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: var(--spark-weight);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sparkline[data-sign='up'] path {
+  stroke: var(--up);
+}
+
+.sparkline[data-sign='down'] path {
+  stroke: var(--down);
 }
 
 /* Allocation */

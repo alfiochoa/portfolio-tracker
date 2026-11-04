@@ -5,6 +5,7 @@ import portfolio from '../data/portfolio.json';
 import { loaded, noSnapshot, unreadable, type Freshness } from './lib/freshness.ts';
 import { allocationOf, positionsOf, type Fund, type Portfolio } from './lib/portfolio.ts';
 import { readPrices, type Returns } from './lib/returns.ts';
+import type { Snapshot } from './lib/snapshot.ts';
 import { renderAllocation } from './ui/allocation.ts';
 import { renderHeader } from './ui/badge.ts';
 import { renderChart } from './ui/chart.ts';
@@ -23,7 +24,7 @@ const allocation: Portfolio = portfolio;
 const positions = positionsOf(funds as Fund[], allocation);
 
 /** The snapshot and its returns, or why there are none. Never rejects. */
-async function loadPrices(): Promise<{ freshness: Freshness; returns: Returns | null }> {
+async function loadPrices(): Promise<{ freshness: Freshness; returns: Returns | null; funds?: Snapshot['funds'] }> {
   const anchor = allocation.anchorDate;
   try {
     // no-cache: revalidate, so a snapshot rebuilt today is not served from yesterday's cache.
@@ -31,7 +32,7 @@ async function loadPrices(): Promise<{ freshness: Freshness; returns: Returns | 
     if (response.status === 404) return { freshness: noSnapshot(anchor), returns: null };
     if (!response.ok) throw new Error(`the snapshot answered HTTP ${response.status}`);
     const { snapshot, returns } = readPrices(allocation, await response.text());
-    return { freshness: loaded(anchor, returns.latest, snapshot.generatedAt, snapshot.source?.name ?? ''), returns };
+    return { freshness: loaded(anchor, returns.latest, snapshot.generatedAt, snapshot.source?.name ?? ''), returns, funds: snapshot.funds };
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     console.error(`price snapshot unreadable: ${reason}`);
@@ -39,19 +40,19 @@ async function loadPrices(): Promise<{ freshness: Freshness; returns: Returns | 
   }
 }
 
-function render(freshness: Freshness, returns: Returns | null): void {
+function render(freshness: Freshness, returns: Returns | null, funds: Snapshot['funds'] | null): void {
   app!.replaceChildren(
     renderHeader(freshness),
     h(
       'main',
       { class: 'sections' },
       renderTiles(freshness, returns),
-      renderChart(freshness),
-      renderPositions(positions, freshness, returns),
+      renderChart(freshness, returns),
+      renderPositions(positions, freshness, returns, funds),
       renderAllocation(allocationOf(positions)),
     ),
     renderFooter(allocation),
   );
 }
 
-void loadPrices().then(({ freshness, returns }) => render(freshness, returns));
+void loadPrices().then(({ freshness, returns, funds }) => render(freshness, returns, funds ?? null));
