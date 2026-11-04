@@ -15,7 +15,15 @@ export interface FundPrices {
   kept?: true;
   /** Why the fund could not be refreshed (with `kept`). */
   error?: string;
+  /**
+   * Vanguard's product page this run: on success, the dates its bars cover (they are the fund's
+   * bars from `from` to `to`, `bars` of them, Vanguard's values) and when they were fetched (kept
+   * when a later run gets the same bars); on failure, why. Absent in files from before M2.
+   */
+  vanguard?: VanguardEntry;
 }
+
+export type VanguardEntry = { fetchedAt: string; from: string; to: string; bars: number } | { error: string };
 
 export interface Snapshot {
   generatedAt: string;
@@ -23,10 +31,15 @@ export interface Snapshot {
   state: SnapshotState;
   /** Why the run was `partial` or `failed`. */
   error?: string;
+  /** A run that is `ok` but could not reach Vanguard for some funds: which, and why. */
+  warning?: string;
   funds: Record<string, FundPrices>;
 }
 
-export const SOURCE = { name: 'Yahoo Finance (unofficial)', kind: 'yahoo' } as const;
+export const SOURCE = { name: 'Vanguard (official) + Yahoo Finance (unofficial)', kind: 'vanguard+yahoo' } as const;
+
+/** A shared date on which Yahoo and Vanguard differ by more than this is reported. */
+export const DIFFERENCE_TOLERANCE = 0.00005;
 
 /** A fund needs this many bars: about three months of working days. */
 export const MIN_BARS = 60;
@@ -50,10 +63,47 @@ export function validateBars(bars: readonly Bar[]): { latest: string } {
   return { latest: bars.at(-1)![0] };
 }
 
-/** What this run got for one fund. */
-export type FundResult =
+/** What one source gave for one fund this run. */
+export type SourceResult = { ok: true; bars: Bar[] } | { ok: false; reason: string };
+
+/**
+ * What this run got for one fund: Yahoo's answer (`ok`, with the currency and bars, or the
+ * reason), and Vanguard's (absent when the fund has no Vanguard page in the catalogue).
+ */
+export type FundResult = (
   | { id: string; ok: true; currency: string; bars: Bar[] }
-  | { id: string; ok: false; reason: string };
+  | { id: string; ok: false; reason: string }
+) & { vanguard?: SourceResult };
+
+/** `over` laid on `base`: on a date both have, `over`'s value; a date only `over` has, inserted in order. */
+export function overlayBars(base: readonly Bar[], over: readonly Bar[]): Bar[] {
+  const byDate = new Map<string, number>(base);
+  for (const [date, nav] of over) byDate.set(date, nav);
+  return [...byDate].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
+/**
+ * `fresh` with `previous`'s bar added on each date between `fresh`'s first and last that `fresh`
+ * lacks: a date Vanguard once filled (2026-10-26, which Yahoo never had) stays when it leaves
+ * Vanguard's ten. `fresh` wins wherever it has a value; dates outside its span are not carried.
+ */
+export function carryForward(fresh: readonly Bar[], previous: readonly Bar[]): Bar[] {
+  if (fresh.length === 0) return [...fresh];
+  const first = fresh[0]![0];
+  const last = fresh.at(-1)![0];
+  const have = new Set(fresh.map(([d]) => d));
+  const carried = previous.filter(([d]) => d > first && d < last && !have.has(d));
+  return carried.length ? overlayBars(carried, fresh) : [...fresh];
+}
+
+/** The dates both have on which the two values differ by more than DIFFERENCE_TOLERANCE. */
+export function differences(yahoo: readonly Bar[], vanguard: readonly Bar[]): { date: string; yahoo: number; vanguard: number }[] {
+  const y = new Map<string, number>(yahoo);
+  return vanguard.flatMap(([date, v]) => {
+    const yv = y.get(date);
+    return yv !== undefined && Math.abs(yv - v) > DIFFERENCE_TOLERANCE ? [{ date, yahoo: yv, vanguard: v }] : [];
+  });
+}
 
 export type Outcome =
   | { write: true; snapshot: Snapshot }
@@ -63,14 +113,28 @@ export type Outcome =
 const sameBars = (a: readonly Bar[], b: readonly Bar[]): boolean =>
   a.length === b.length && a.every(([d, v], i) => d === b[i]![0] && v === b[i]![1]);
 
+/** Every bar of `some` is in `all`, with the same value. */
+const sameValues = (all: readonly Bar[], some: readonly Bar[]): boolean => {
+  const byDate = new Map<string, number>(all);
+  return some.every(([d, v]) => byDate.get(d) === v);
+};
+
 /**
  * Merge one run's results (one per fund, in catalogue order) with the previous snapshot.
  *
- * - Every fund ok: `state: "ok"`. A fund whose bars and currency are what the previous file has
- *   keeps its previous entry, `fetchedAt` included, so a second run changes only `generatedAt`.
- * - Some funds failed: each keeps its previous entry with `kept: true` and `error`; `state: "partial"`.
- * - Every fund failed: the previous file, unchanged but for `generatedAt`, `state: "failed"` and `error`.
- * - A fund failed and the previous file has no entry for it: nothing is written.
+ * Per fund, the base is Yahoo's bars from this run, with the previous file's value carried on each
+ * date inside their span that they lack (carryForward: a hole once filled stays filled), or, when
+ * Yahoo failed, the previous file's bars (`kept: true`, `error`); Vanguard's bars are laid over it
+ * (overlayBars: Vanguard wins over both on its dates) and recorded in
+ * `vanguard`, or Vanguard's failure is. An entry whose bars, currency and Vanguard bars are what
+ * the previous file has keeps its times, so a second run on the same answers changes only
+ * `generatedAt`.
+ *
+ * - Every fund's Yahoo bars refreshed: `state: "ok"`, with a `warning` naming the funds Vanguard failed for.
+ * - Some fund's Yahoo bars kept from the previous file: `state: "partial"` and `error`, whatever Vanguard did.
+ * - No fund got bars from either source: the previous file, unchanged but for `generatedAt`,
+ *   `state: "failed"` and `error`.
+ * - Yahoo failed for a fund the previous file does not have: nothing is written.
  */
 export function mergeRun(previous: Snapshot | null, results: readonly FundResult[], now: Date): Outcome {
   const generatedAt = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -88,23 +152,53 @@ export function mergeRun(previous: Snapshot | null, results: readonly FundResult
     };
   }
 
-  if (previous && failures.length === results.length) {
-    return { write: true, snapshot: { ...previous, generatedAt, state: 'failed', error: `every fund failed: ${reasons}` } };
+  if (previous && failures.length === results.length && !results.some((r) => r.vanguard?.ok)) {
+    const both = failures.map((f) => `${f.id}: ${f.reason}${f.vanguard && !f.vanguard.ok ? ` (vanguard: ${f.vanguard.reason})` : ''}`).join('; ');
+    const snapshot: Snapshot = { ...previous, generatedAt, state: 'failed', error: `every fund failed: ${both}` };
+    delete snapshot.warning; // the previous run's, about bars this run did not get
+    return { write: true, snapshot };
   }
 
   const funds: Record<string, FundPrices> = {};
+  const vanguardFailures: string[] = [];
   for (const r of results) {
     const before = previous?.funds[r.id];
-    if (!r.ok) {
-      funds[r.id] = { currency: before!.currency, fetchedAt: before!.fetchedAt, bars: before!.bars, kept: true, error: r.reason };
-    } else if (before && !before.kept && before.currency === r.currency && sameBars(before.bars, r.bars)) {
-      funds[r.id] = { currency: before.currency, fetchedAt: before.fetchedAt, bars: before.bars };
-    } else {
-      funds[r.id] = { currency: r.currency, fetchedAt: generatedAt, bars: r.bars };
+    const currency = r.ok ? r.currency : before!.currency;
+    let bars = r.ok ? carryForward(r.bars, before?.bars ?? []) : before!.bars;
+    let vanguard: VanguardEntry | undefined;
+    if (r.vanguard?.ok) {
+      const v = r.vanguard.bars;
+      const merged = overlayBars(bars, v);
+      try {
+        validateBars(merged);
+        bars = merged;
+        const was = before?.vanguard;
+        const same = was && 'fetchedAt' in was && was.from === v[0]![0] && was.to === v.at(-1)![0] && was.bars === v.length && sameValues(before.bars, v);
+        vanguard = { fetchedAt: same ? was.fetchedAt : generatedAt, from: v[0]![0], to: v.at(-1)![0], bars: v.length };
+      } catch (e) {
+        vanguard = { error: `not laid over: ${(e as Error).message}` };
+      }
+    } else if (r.vanguard) {
+      vanguard = { error: r.vanguard.reason };
     }
+    if (vanguard && 'error' in vanguard) vanguardFailures.push(`${r.id}: ${vanguard.error}`);
+
+    let entry: FundPrices;
+    if (!r.ok) {
+      entry = { currency, fetchedAt: before!.fetchedAt, bars, kept: true, error: r.reason };
+    } else if (before && !before.kept && before.currency === currency && sameBars(before.bars, bars)) {
+      entry = { currency, fetchedAt: before.fetchedAt, bars };
+    } else {
+      entry = { currency, fetchedAt: generatedAt, bars };
+    }
+    if (vanguard) entry.vanguard = vanguard;
+    funds[r.id] = entry;
   }
   const snapshot: Snapshot = { generatedAt, source: { ...SOURCE }, state: failures.length ? 'partial' : 'ok', funds };
   if (failures.length) snapshot.error = `${failures.length} of ${results.length} funds kept from the previous snapshot: ${reasons}`;
+  else if (vanguardFailures.length) {
+    snapshot.warning = `Vanguard failed for ${vanguardFailures.length} of ${results.length} funds, so Yahoo's bars alone are used for them: ${vanguardFailures.join('; ')}`;
+  }
   return { write: true, snapshot };
 }
 
@@ -117,10 +211,12 @@ export function renderSnapshot(s: Snapshot): string {
   const j = JSON.stringify;
   const head = [`  "generatedAt": ${j(s.generatedAt)},`, `  "source": ${j(s.source)},`, `  "state": ${j(s.state)},`];
   if (s.error !== undefined) head.push(`  "error": ${j(s.error)},`);
+  if (s.warning !== undefined) head.push(`  "warning": ${j(s.warning)},`);
   const funds = Object.entries(s.funds).map(([id, f]) => {
     const lines = [`    ${j(id)}: {`, `      "currency": ${j(f.currency)},`, `      "fetchedAt": ${j(f.fetchedAt)},`];
     if (f.kept) lines.push(`      "kept": true,`);
     if (f.error !== undefined) lines.push(`      "error": ${j(f.error)},`);
+    if (f.vanguard !== undefined) lines.push(`      "vanguard": ${j(f.vanguard)},`);
     lines.push(`      "bars": [`, f.bars.map((b) => `        ${j(b)}`).join(',\n'), '      ]', '    }');
     return lines.join('\n');
   });
@@ -158,9 +254,13 @@ export function parseSnapshot(text: string): Snapshot {
   if (typeof s.source !== 'object' || s.source === null || typeof s.source.name !== 'string') {
     throw new Error('the snapshot does not name its source');
   }
+  if (s.warning !== undefined && typeof s.warning !== 'string') throw new Error('the snapshot\'s warning is not text');
   for (const [id, f] of Object.entries(s.funds)) {
     if (!Array.isArray(f.bars) || typeof f.fetchedAt !== 'string' || typeof f.currency !== 'string') {
       throw new Error(`fund ${id} has no bars, fetchedAt or currency`);
+    }
+    if (f.vanguard !== undefined && (typeof f.vanguard !== 'object' || f.vanguard === null)) {
+      throw new Error(`fund ${id}'s vanguard entry is not an object`);
     }
   }
   return s;

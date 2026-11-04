@@ -13,7 +13,7 @@ export type BadgeState = 'FRESH' | 'STALE' | 'PARTIAL' | 'ERROR';
 export type Tone = 'ok' | 'warn' | 'error' | 'none';
 
 /** What the badge needs to know of the snapshot itself. */
-export type SnapshotMeta = Pick<Snapshot, 'generatedAt' | 'source' | 'state' | 'error'>;
+export type SnapshotMeta = Pick<Snapshot, 'generatedAt' | 'source' | 'state' | 'error' | 'warning'>;
 
 /** The series facts PARTIAL is judged on (see seriesFacts). */
 export interface SeriesFacts {
@@ -68,7 +68,7 @@ export interface Freshness {
 }
 
 /** The source the snapshot script uses, named before any snapshot exists. */
-const DEFAULT_SOURCE = 'Yahoo Finance (unofficial)';
+const DEFAULT_SOURCE = 'Vanguard (official) + Yahoo Finance (unofficial)';
 
 /**
  * PARTIAL's facts, from the returns and the snapshot's funds: L, each portfolio fund's latest
@@ -148,11 +148,17 @@ function snapshotLines(s: SnapshotMeta, timeZone?: string): string[] {
   ];
 }
 
-/** The snapshot run's own state, when it is not `ok`, with the reason the script recorded. */
+/**
+ * The snapshot run's own state, when it is not `ok`, with the reason the script recorded; then the
+ * run's warning, when it has one (Vanguard failed for some funds: their newest days are Yahoo's
+ * alone, so unofficial, but complete and current, which is why it changes no state or colour).
+ */
 function runLines(s: SnapshotMeta): string[] {
-  if (s.state === 'partial') return [`The snapshot run was partial: ${s.error ?? 'no reason recorded'}`];
-  if (s.state === 'failed') return [`The last snapshot run failed, so these are the previous prices: ${s.error ?? 'no reason recorded'}`];
-  return [];
+  const lines: string[] = [];
+  if (s.state === 'partial') lines.push(`The snapshot run was partial: ${s.error ?? 'no reason recorded'}`);
+  if (s.state === 'failed') lines.push(`The last snapshot run failed, so these are the previous prices: ${s.error ?? 'no reason recorded'}`);
+  if (s.warning) lines.push(`Warning: ${s.warning}`);
+  return lines;
 }
 
 function error(anchorDate: string, reason: string, snapshot: SnapshotMeta | undefined, timeZone?: string): Freshness {

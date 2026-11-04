@@ -191,11 +191,27 @@ describe('the snapshot run’s own state', () => {
     expect(f.text).toBe('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · STALE · PARTIAL · run failed');
   });
 
+  it('adds the run’s warning as the detail’s last line, changing no state, badge text or colour', () => {
+    const warning = "Vanguard failed for 1 of 8 funds, so Yahoo's bars alone are used for them: europe: HTTP 404 (404 | Vanguard UK Professional)";
+    const f = assess({}, {}, { warning });
+    expect(f.text).toBe('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+    expect(f.states).toEqual(['FRESH']);
+    expect(f.tone).toBe('ok');
+    expect(f.run).toBeUndefined();
+    expect(f.details.at(-1)).toBe(`Warning: ${warning}`);
+    expect(f.details.at(-2)).toMatch(/^FRESH: /);
+    // After the run lines when there are any, and in the ERROR detail too.
+    const partial = assess({}, {}, { state: 'partial', error: 'e', warning: 'w' });
+    expect(partial.details.slice(-2)).toEqual(['The snapshot run was partial: e', 'Warning: w']);
+    const unreadable = assessFreshness({ anchorDate: ANCHOR, prices: { kind: 'unreadable', reason: 'r', snapshot: { ...SNAPSHOT, warning: 'w' } }, now: at('2026-11-04'), timeZone: TZ });
+    expect(unreadable.details).toContain('Warning: w');
+  });
+
   it('adds nothing when ok', () => {
     const f = assess();
     expect(f.run).toBeUndefined();
     expect(f.text.endsWith('· FRESH')).toBe(true);
-    expect(f.details.some((d) => d.startsWith('The snapshot run') || d.startsWith('The last snapshot'))).toBe(false);
+    expect(f.details.some((d) => d.startsWith('The snapshot run') || d.startsWith('The last snapshot') || d.startsWith('Warning'))).toBe(false);
   });
 });
 
@@ -213,6 +229,11 @@ describe('before there are prices', () => {
     expect(f.text).toBe('Allocation as of 2026-11-04 · no prices yet');
     expect(f.state).toBe('no-snapshot');
     expect(hasPrices(f)).toBe(false);
+    expect(f.details[1]).toBe('Prices will come from Vanguard (official) + Yahoo Finance (unofficial), once a day, through npm run snapshots.');
+  });
+
+  it('names both sources when the snapshot names none', () => {
+    expect(assess({}, {}, { source: { name: '', kind: '' } }).details[0]).toBe('Source: Vanguard (official) + Yahoo Finance (unofficial)');
   });
 });
 
