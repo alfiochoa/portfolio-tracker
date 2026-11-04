@@ -12,11 +12,12 @@ let outside: string[] = [];
 let errors: string[] = [];
 const FIXTURE = readFileSync(path.join(import.meta.dirname, 'fixtures', 'prices.json'), 'utf8');
 
-type Snapshot = 'fixture' | 'missing' | 'unreadable' | ((text: string) => string);
+type Snapshot = 'fixture' | 'missing' | 'unreadable' | 'http500' | ((text: string) => string);
 
 async function open(page: Page, snapshot: Snapshot = 'fixture'): Promise<void> {
   await page.route('**/data/prices.json', (route) => {
     if (snapshot === 'missing') return route.fulfill({ status: 404, body: 'Not Found' });
+    if (snapshot === 'http500') return route.fulfill({ status: 500, body: 'boom' });
     if (snapshot === 'unreadable') return route.fulfill({ status: 200, contentType: 'application/json', body: '{"generatedAt": "2026-11' });
     const body = typeof snapshot === 'function' ? snapshot(FIXTURE) : FIXTURE;
     return route.fulfill({ status: 200, contentType: 'application/json', body });
@@ -121,6 +122,75 @@ test('the tiles and the table show the returns computed by hand from the fixture
     await page.screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-loaded.png`), fullPage: true });
   }
 });
+
+/*
+ * A fund that lags (verifier, T-004). Drop japan's 2026-11-03 bar: L falls back to 2026-11-02, which is before the
+ * anchor T = 2026-11-04, so P_i(T) is each fund's last NAV on or before T, and japan's (166.5, the a = 111 level) is
+ * not the others' (a = 110): V(L) is no longer 1. With E the equity weights, w_j japan's and B the bonds':
+ *
+ *   V(t) = (E − w_j)·a(t)/110 + w_j·a(t)/111 + B·b(t)/50          (a, b as in the table above)
+ *   series: 09-01, 10-01, 10-27, 10-28, 10-29, 10-30, 11-02 (10-26 dropped); 5d counts back to 10-01, and so does
+ *   1w (L − 7 = 10-26, dropped) and 1m (10-02, a Friday); 2m is 09-02, so 09-01.
+ *   1d  S 10-30: V(L)/V(S) − 1 = −0.8266 %   5d/1w/1m S 10-01: +0.8405 %   2m S 09-01: +9.4014 %
+ *   (exact fractions, worked out in Python from the weights in data/portfolio.json)
+ * Cells: japan 1d = 166.5/168 − 1 = −0.89 %; Eurozone Inflation-Linked 2m = 25.05/26 − 1 = −3.65 %.
+ */
+test('with a fund one day behind, the windows end at the earlier date and the anchor is each fund\'s own last NAV', async ({ page }) => {
+  await open(page, (text) => {
+    const s = JSON.parse(text) as { funds: Record<string, { bars: [string, number][] }> };
+    s.funds.japan!.bars.pop();
+    return JSON.stringify(s);
+  });
+  const performance = page.getByRole('region', { name: 'Performance' });
+  const expected = [
+    ['1d', '−0.83 %', '2026-10-30'],
+    ['5d', '+0.84 %', '2026-10-01'],
+    ['1w', '+0.84 %', '2026-10-01'],
+    ['1m', '+0.84 %', '2026-10-01'],
+    ['2m', '+9.40 %', '2026-09-01'],
+  ];
+  for (const [window, value, start] of expected) {
+    const tile = performance.locator(`.tile[data-window="${window}"]`);
+    await expect(tile.locator('.tile-value')).toHaveText(value!);
+    await expect(tile.locator('time')).toHaveText(start!);
+  }
+  const positions = page.getByRole('region', { name: 'Positions' });
+  await expect(positions.locator('tr[data-fund="japan"] .ret[data-window="1d"]')).toHaveText('−0.89 %');
+  await expect(positions.locator('tr[data-fund="euroinfl"] .ret[data-window="2m"]')).toHaveText('−3.65 %');
+});
+
+// A snapshot the page cannot trust shows no number at all, never a wrong one, and the allocation stays.
+const BAD_SNAPSHOTS: [string, Snapshot][] = [
+  ['an HTTP 500', 'http500'],
+  ['an empty object', () => '{}'],
+  ['an HTML page with status 200', () => '<!doctype html><html><body>hello</body></html>'],
+  ['a portfolio fund missing', (t) => mutate(t, (s) => delete s.funds.japan)],
+  ['a fund without bars', (t) => mutate(t, (s) => (s.funds.japan!.bars = []))],
+  ['a NAV of zero', (t) => mutate(t, (s) => (s.funds.japan!.bars[3]![1] = 0))],
+  ['a NAV that is a string', (t) => mutate(t, (s) => (s.funds.japan!.bars[3]![1] = '5' as unknown as number))],
+  ['bars out of order', (t) => mutate(t, (s) => s.funds.japan!.bars.reverse())],
+];
+
+function mutate(text: string, change: (s: { funds: Record<string, { bars: [string, number][] }> }) => unknown): string {
+  const s = JSON.parse(text) as { funds: Record<string, { bars: [string, number][] }> };
+  change(s);
+  return JSON.stringify(s);
+}
+
+for (const [name, snapshot] of BAD_SNAPSHOTS) {
+  test(`with ${name} for a snapshot, the page says it is unreadable and shows no return`, async ({ page }) => {
+    await open(page, snapshot);
+    await expect(page.locator('.badge')).toContainText('prices unreadable');
+    const performance = page.getByRole('region', { name: 'Performance' });
+    await expect(performance.locator('.placeholder')).toContainText('could not be read');
+    await expect(performance.locator('.tile')).toHaveCount(0);
+    await expect(performance).not.toContainText('%');
+    const positions = page.getByRole('region', { name: 'Positions' });
+    for (const text of await positions.locator('td.ret').allTextContents()) expect(text).toBe('—');
+    await expect(positions.locator('.total .weight')).toHaveText('100.00 %');
+    await expect(page.getByRole('region', { name: 'Allocation' }).getByText('Equities 90.34 %')).toBeVisible();
+  });
+}
 
 test('a window the series does not reach says "not enough history"', async ({ page }, testInfo) => {
   // Only the bars from 2026-10-27 on: six series dates, so 1d, 5d and 1w have a start, 1m and 2m do not.
