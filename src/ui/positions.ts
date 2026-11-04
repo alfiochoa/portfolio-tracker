@@ -4,12 +4,25 @@
 import { formatPercent, NO_VALUE } from '../lib/format.ts';
 import type { Freshness } from '../lib/freshness.ts';
 import { totalWeight, type Position } from '../lib/portfolio.ts';
+import { WINDOWS, type Returns } from '../lib/returns.ts';
 import { h, section } from './dom.ts';
-import { WINDOWS } from './tiles.ts';
+import { NOT_ENOUGH, signedReturn } from './tiles.ts';
 
-function returnCells(): HTMLElement[] {
-  // M0: the columns exist and say there is no value yet.
-  return WINDOWS.map((w) => h('td', { role: 'cell', class: 'num ret', 'data-window': w }, NO_VALUE));
+/**
+ * The five return cells of one row: `fund` names the fund, or is null for the total row (the
+ * portfolio's returns). Without returns (no snapshot, or an unreadable one) each says there is no value.
+ */
+function returnCells(returns: Returns | null, fund: string | null): HTMLElement[] {
+  return WINDOWS.map((window, i) => {
+    const attrs = { role: 'cell', class: 'num ret', 'data-window': window };
+    const w = returns?.windows[i];
+    if (!w) return h('td', attrs, NO_VALUE);
+    if (!w.enough) return h('td', { ...attrs, class: 'ret ret-missing', 'data-sign': 'none' }, NOT_ENOUGH);
+    const value = fund === null ? w.portfolio : w.funds[fund];
+    if (value === undefined) return h('td', attrs, NO_VALUE);
+    const { text, sign } = signedReturn(value);
+    return h('td', { ...attrs, 'data-sign': sign, title: `${window} since ${w.start}` }, text);
+  });
 }
 
 function fundCell(p: Position): HTMLElement {
@@ -29,8 +42,8 @@ function fundCell(p: Position): HTMLElement {
   return h('td', { role: 'cell', class: 'fund' }, button, full);
 }
 
-export function renderPositions(positions: readonly Position[], freshness: Freshness): HTMLElement {
-  void freshness; // M1 fills the return cells and the sparklines.
+export function renderPositions(positions: readonly Position[], freshness: Freshness, returns: Returns | null): HTMLElement {
+  const prices = freshness.state === 'loaded' ? returns : null; // the sparklines are T-005's
   const head = h(
     'tr',
     { role: 'row' },
@@ -46,7 +59,7 @@ export function renderPositions(positions: readonly Position[], freshness: Fresh
       h('td', { role: 'cell', class: 'class' }, p.fund.assetClass.en),
       fundCell(p),
       h('td', { role: 'cell', class: 'num weight' }, formatPercent(p.weight)),
-      ...returnCells(),
+      ...returnCells(prices, p.fund.id),
     ),
   );
   const total = h(
@@ -54,7 +67,7 @@ export function renderPositions(positions: readonly Position[], freshness: Fresh
     { role: 'row', class: 'total' },
     h('th', { role: 'rowheader', scope: 'row', colspan: '2', class: 'total-label' }, 'Total'),
     h('td', { role: 'cell', class: 'num weight' }, formatPercent(totalWeight(positions))),
-    ...returnCells(),
+    ...returnCells(prices, null),
   );
   return section(
     'positions',
@@ -66,6 +79,14 @@ export function renderPositions(positions: readonly Position[], freshness: Fresh
       h('tbody', { role: 'rowgroup' }, ...rows),
       h('tfoot', { role: 'rowgroup' }, total),
     ),
-    h('p', { class: 'section-note' }, 'Tap a fund for its full name. Returns appear once prices are wired.'),
+    h(
+      'p',
+      { class: 'section-note' },
+      prices
+        ? `Tap a fund for its full name. Returns up to the NAV of ${prices.latest}; each window starts on the date under its tile.`
+        : freshness.state === 'unreadable'
+          ? 'Tap a fund for its full name. No returns: the price snapshot could not be read.'
+          : 'Tap a fund for its full name. Returns appear once prices are wired.',
+    ),
   );
 }
