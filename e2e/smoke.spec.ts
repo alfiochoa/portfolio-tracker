@@ -91,3 +91,23 @@ test('a fund shows its full name on hover and on tap', async ({ page }, testInfo
   await button.click();
   await expect(longest.locator('.fund-full')).toBeHidden();
 });
+
+test('the full name opens from the keyboard, and data-theme overrides the system theme', async ({ page }) => {
+  const row = page.locator('tr[data-fund="euroinfl"]');
+  const button = row.locator('.fund-name');
+  await button.focus();
+  await page.keyboard.press('Enter');
+  await expect(button).toHaveAttribute('aria-expanded', 'true');
+  await expect(row.locator('.fund-full')).toBeVisible();
+
+  // A data-theme on <html> wins over prefers-color-scheme, in either direction.
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const system = await bg();
+  for (const forced of ['light', 'dark']) {
+    await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), forced);
+    const forcedBg = await bg();
+    expect(forcedBg).toBe(forced === 'dark' ? 'rgb(26, 26, 25)' : 'rgb(252, 252, 251)');
+  }
+  await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+  expect(await bg()).toBe(system);
+});
