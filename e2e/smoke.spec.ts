@@ -831,6 +831,65 @@ test('a tab shown again fetches the snapshot again and judges it against the clo
   await expect(page.locator('.tile[data-window="2m"] .tile-value')).toHaveText('+8.49 %');
 });
 
+test('a tab shown again after an ERROR recovers, and shows a snapshot rebuilt meanwhile', async ({ page }) => {
+  let answer: 'fail' | 'ok' | 'rebuilt' = 'fail';
+  await page.clock.setFixedTime(new Date('2026-11-05T11:00:00Z'));
+  await page.route('**/data/prices.json', (route) => {
+    if (answer === 'fail') return route.fulfill({ status: 500, body: 'boom' });
+    const body = answer === 'rebuilt' ? JSON.stringify({ ...JSON.parse(WITHOUT_DROPPED(FIXTURE)), generatedAt: '2026-11-05T09:00:00Z' }) : WITHOUT_DROPPED(FIXTURE);
+    return route.fulfill({ status: 200, contentType: 'application/json', body });
+  });
+  await page.goto('/');
+  const badge = page.locator('.badge');
+  await expect(badge).toHaveText('Allocation as of 2026-11-04 · prices unreadable · ERROR');
+  const show = () =>
+    page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  answer = 'ok';
+  await show();
+  await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+  answer = 'rebuilt';
+  await show();
+  await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-05 09:00 UTC · FRESH');
+  await expect(page.locator('.tile')).toHaveCount(5);
+});
+
+test('a snapshot whose body stalls after the headers is also ERROR after 15 s', async ({ page }) => {
+  await page.clock.install({ time: new Date(WEDNESDAY) });
+  // route.fulfill sends headers and body together, so the stall is a stand-in fetch: headers arrive, the body never does, and it fails only when the page aborts.
+  await page.addInitScript(() => {
+    const real = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      if (!String(input).endsWith('data/prices.json')) return real(input, init);
+      const signal = init?.signal;
+      const body = new ReadableStream({
+        start(controller) {
+          signal?.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError')));
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    };
+  });
+  await page.goto('/');
+  const badge = page.locator('.badge');
+  await expect(badge).toHaveText('Allocation as of 2026-11-04 · loading prices…');
+  await page.clock.runFor(16_000);
+  await expect(badge).toHaveText('Allocation as of 2026-11-04 · prices unreadable · ERROR');
+  await badge.click();
+  await expect(page.locator('.badge-detail li').first()).toHaveText('ERROR: the snapshot did not answer in 15 s');
+});
+
+test('Escape with no badge detail open leaves focus where it is', async ({ page }) => {
+  await open(page);
+  const fund = page.locator('button.fund-name').first();
+  await fund.focus();
+  await page.keyboard.press('Escape');
+  await expect(fund).toBeFocused();
+  await expect(page.locator('.badge')).toHaveAttribute('aria-expanded', 'false');
+});
+
 // The freshness rule at its edges, on the fixture cut off at a date L (every fund ends there). "Two weekdays
 // before today", a Saturday or a Sunday counting as the Monday after: derived by hand from the 2026 calendar
 // (2026-10-29 Thu, 10-30 Fri, 10-31 Sat, 11-01 Sun, 11-02 Mon, 11-03 Tue).
