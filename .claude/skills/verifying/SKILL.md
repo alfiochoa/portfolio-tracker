@@ -36,4 +36,4 @@ The numbers are the product. Anything `docs/SPEC.md` calls exact (weights, the f
 
 ## Traps
 
-(none yet; the shared notes move here at a milestone close when they prove true)
+- `.team/` sits inside the main checkout: any tool that globs the whole tree (eslint, tsc, vitest, playwright) must ignore `.team`, or it lints the designer's mock-up scripts. `eslint.config.js` does; keep it so when adding a tool.
