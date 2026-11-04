@@ -113,19 +113,20 @@ Acceptance:
 - Every fund in `data/funds.json` has its ISIN verified against two public sources and its Yahoo symbol, and T-002's report says where.
 - `npm run check` (typecheck, lint, unit tests) and `npm run e2e` (Playwright smoke, sandboxed Chromium) pass; the check runs without network.
 - The page works at 360 px and 1280 px wide, in dark and light, from design tokens (CSS variables) that the chosen direction can replace.
-- Alfredo has chosen a visual direction from the designer's options, and `docs/DESIGN.md` records it.
+- The designer's direction options are ready for Alfredo to choose from (the choice itself, and `docs/DESIGN.md`, are M1's: a decision waiting on the owner does not hold the foundation).
 
 ### M1: performance
 
 The snapshot script and the five windows: tiles, chart, per-fund returns, the freshness badge, the chosen design applied.
 
 Acceptance:
-- `npm run snapshots` writes `public/data/prices.json` with at least three months of daily NAVs for every fund from Yahoo Finance; run twice, the second run reuses what it has; when the source fails, the previous file is kept and the state and reason are recorded.
+- `npm run snapshots` writes `public/data/prices.json` with at least three months of daily NAVs for every fund from Yahoo Finance; run twice in a row, the second run changes nothing but `generatedAt`; when the source fails for a fund, that fund's previous bars are kept and the state and reason are recorded; when it fails for all, the previous file is written back with `state: failed`.
 - One NAV per fund in the snapshot matches Vanguard's published NAV for that date (the report names the dates and pages).
 - The tiles, the chart, the positions table and the total row show the values the exact definitions give, and a script in the repo recomputes them from the two data files so the verifier can compare.
 - The badge states behave as the table says (verified by faking the current time and by removing a date from a fund).
 - The design system from the chosen direction is applied to every section, both themes, 360 px and 1280 px.
-- The Twelve Data probe is done and its result recorded in `docs/DECISIONS.md`.
+- Alfredo has chosen a visual direction from the designer's options; `docs/DESIGN.md` and the `design-pass` skill record it.
+- The Twelve Data probe is done and its result recorded in `docs/DECISIONS.md` (or, if no key was given, that is recorded instead).
 
 ### M2: keeping it current
 
