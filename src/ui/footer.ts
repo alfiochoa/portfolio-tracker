@@ -9,7 +9,7 @@ function pricesLine(f: Freshness): string {
     case 'loading':
       return 'Prices: loading the snapshot…';
     case 'no-snapshot':
-      return 'Prices: no snapshot yet. They will come from Yahoo Finance (unofficial), once a day, through npm run snapshots.';
+      return 'Prices: no snapshot yet. They will come from Vanguard (official) and Yahoo Finance (unofficial), once a day, through npm run snapshots.';
     case 'unreadable':
       return f.generatedAt
         ? `Prices: the snapshot of ${utcTime(f.generatedAt)} from ${f.source ?? 'the price source'} could not be used, so no returns are shown.`
