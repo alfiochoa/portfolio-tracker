@@ -73,7 +73,7 @@ so `V(T) = 1`: it is a buy-and-hold of the exported allocation, valued backwards
 | 1m | the last portfolio-series date on or before the same day of the previous month (the month's last day when that day does not exist) |
 | 2m | likewise, two months back |
 
-When the series does not reach far enough for a window, that tile says "not enough history" instead of a number. The chart and the sparklines cover the 2m window, indexed so that the first point is 100.
+When the series does not reach far enough for a window, that tile says "not enough history" instead of a number. Note that 5d and 1w start on the same date in any week without a market holiday, so the two tiles usually agree; both are kept because Alfredo asked for both (open with him: swap 1w for a longer window). The chart and the sparklines cover the 2m window, indexed so that the first point is 100.
 
 **Display.** Returns as percentages with two decimals and an explicit sign (`+1.23 %`, `−0.45 %`, `0.00 %`), weights with two decimals, dates as `2026-11-03`.
 
@@ -83,7 +83,7 @@ When the series does not reach far enough for a window, that tile says "not enou
 |---|---|
 | `FRESH` | `L` is no older than two weekdays before today (the normal one-day publication lag plus one day's slack) |
 | `STALE` | older than that: the snapshot was not rebuilt, or the source stopped publishing |
-| `PARTIAL` | at least one fund's latest NAV is older than `L`, or a date was dropped from the portfolio series in the 2m window |
+| `PARTIAL` | the funds disagree on their latest NAV date (some have a NAV newer than `L`, so `L` is held back by the fund that lags), or a date was dropped from the portfolio series in the 2m window |
 | `ERROR` | the snapshot cannot be loaded or parsed, or a fund has no bars at all |
 
 `PARTIAL` combines with `FRESH`/`STALE` (`FRESH · PARTIAL`). The badge also shows the snapshot's own `state` (`ok`, `partial`, `failed`) when it is not `ok`, with the reason the script recorded.
