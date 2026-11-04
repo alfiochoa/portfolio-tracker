@@ -2,6 +2,14 @@
 
 Newest first. One entry per decision: what was chosen, over what, and why. Keep entries short.
 
+## 2026-11-04: TypeScript pinned to 6.0.x (builder-1, T-001)
+
+typescript-eslint 8.72 supports TypeScript `<6.1`, so `typescript` is `^6.0.3` rather than the current 7.x; raise it when typescript-eslint does. `npm audit` reports one moderate advisory (minimatch, through eslint only, dev-time); fixing it would mean downgrading eslint to 9, so it is left.
+
+## 2026-11-04: on a phone the positions table becomes one card per fund (builder-1, T-001)
+
+Under 40rem each row is a card (name and weight, asset class, then the five windows with their labels), with explicit ARIA table roles so it still reads as a table. A horizontally scrolling table was the alternative; it would hide the returns off-screen, and the returns are the point.
+
 ## 2026-11-04: prices come from Yahoo Finance's chart endpoint; Twelve Data only if a probe shows the free plan serves fund NAVs (architect)
 
 The eight funds are Irish UCITS mutual funds, not ETFs. Twelve Data knows the exact share classes (`0P00011HBK` etc., Frankfurt) but its pricing page lists "Mutual funds NAV" under the Pro plan ($229/month), so the free key Alfredo offers very likely returns an error for them. Yahoo Finance's keyless chart endpoint (`/v8/finance/chart/0P00011HBK.F`) returned 65 daily EUR NAVs per fund for the last three months, checked for all eight on 2026-11-04. Chosen: Yahoo as the primary source (labelled unofficial on the badge, previous file kept on failure), one 1-credit Twelve Data probe in M1 to decide whether it stays as a fallback. Alternatives considered: proxy US-listed ETFs converted to EUR on the free Twelve Data plan (approximate, no match for the bond funds), scraping Vanguard's own site (no documented endpoint found), Morningstar's timeseries API (returned nothing).

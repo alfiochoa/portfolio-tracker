@@ -18,15 +18,16 @@ Static hosting, no backend, no secret in the browser, the same shape as market-d
 
 ```
 index.html                 the one page's shell
-src/main.ts                boot: load data/portfolio.json and public/data/prices.json, compute, render
+src/main.ts                boot: data/*.json bundled at build time, public/data/prices.json fetched at runtime; compute, render
 src/lib/                   pure, unit-tested, no DOM:
+  portfolio.ts             the catalogue and allocation types, positions joined to the catalogue, equities/bonds split
   returns.ts               portfolio series, value index, the five windows (SPEC "Exact definitions")
   freshness.ts             badge state from a snapshot and a clock
   format.ts                percentages, dates, signs
   xlsx.ts                  the minimal SpreadsheetML reader for the export
   yahoo.ts                 parser for the chart endpoint's JSON into bars
   twelvedata.ts            (M1, if the probe succeeds) parser and credit rules
-src/ui/                    rendering, one file per section: badge.ts, tiles.ts, chart.ts, positions.ts, allocation.ts
+src/ui/                    rendering, one file per section: badge.ts (header), tiles.ts, chart.ts, positions.ts, allocation.ts, footer.ts; dom.ts is the element builder (text as text, never innerHTML)
 src/styles.css             tokens on :root (and the dark/light overrides), then components
 data/funds.json            the fund catalogue (hand-maintained, committed)
 data/portfolio.json        the allocation, generated from the export by scripts/import-portfolio.ts
