@@ -192,6 +192,69 @@ code {
   font-size: var(--text-sm);
 }
 
+/* Performance tiles: five in a row on a laptop, three then two on a phone */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tile {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.tile-label {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-strong);
+}
+.tile-value {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+  text-align: left;
+}
+.tile-missing {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: normal;
+}
+.tile-start {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+/* A return's colour is its sign: up, down, or neither for 0.00 %. */
+[data-sign='up'] .tile-value,
+.positions .ret[data-sign='up'] {
+  color: var(--up);
+}
+[data-sign='down'] .tile-value,
+.positions .ret[data-sign='down'] {
+  color: var(--down);
+}
+.positions .ret[data-sign='flat'] {
+  color: var(--fg);
+}
+.positions .ret-missing {
+  font-size: var(--text-xs);
+  text-align: right;
+}
+.visually-hidden {
+  position: absolute;
+  width: var(--border);
+  height: var(--border);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* Positions: a table on a laptop */
 
 .positions {
@@ -290,7 +353,7 @@ code {
   .positions tr {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    column-gap: var(--space-2);
+    column-gap: var(--space-1); /* 8px left "+10.00 %" a pixel short of its fifth of 328px */
     padding: var(--space-2) 0 var(--space-3);
     border-bottom: var(--border) solid var(--line);
   }
@@ -335,6 +398,8 @@ code {
   .positions td.ret {
     grid-row: 3;
     padding-top: var(--space-2);
+    /* Five windows share 360 px: one step down so "+10.00 %" (and the bold total) fits its column. */
+    font-size: var(--text-xs);
     text-align: left;
   }
 
