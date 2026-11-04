@@ -2,6 +2,14 @@
 
 Newest first. One entry per decision: what was chosen, over what, and why. Keep entries short.
 
+## 2026-11-04: a Yahoo bar carries the NAV date; prices are read back as the shortest 32-bit float (builder-1, T-003)
+
+Checked on all eight funds against Vanguard's UK professional product pages (`vanguard.co.uk/professional/product/fund/<equity|bond>/<id>/<ISIN>`, the last ten NAVs): 72 of 72 fund-dates equal, under the same date, so no shift is applied. Yahoo serves the prices as 32-bit floats (597.1246 arrives as 597.1245727539062); the parser writes the shortest decimal that is the same float, which restores Vanguard's four decimals exactly. A fund's `fetchedAt` is kept when a later run fetches the same bars, so a second run changes only `generatedAt`. The request's User-Agent is the bare `Mozilla/5.0`: full browser strings got 429 from this machine every time.
+
+## 2026-11-04: Yahoo's missing 2026-10-26 NAV is accepted for now; Vanguard's own page becomes the second source in M2 (architect)
+
+Yahoo has a null bar on 2026-10-26 for all eight funds although Vanguard published NAVs that day (US 500 €606.4686). The date is simply absent from the portfolio series; it moves 1d/5d around that date by one day and costs the chart one point. Vanguard's product pages give the last ten official NAVs per fund: M2 adds them as a second source that fills Yahoo's holes and takes precedence for the days it covers (task T-010). Detecting "a weekday missing in every fund" was rejected: without a holiday calendar it would flag every real non-dealing day.
+
 ## 2026-11-04: the import keeps the export's own digits for each weight (builder-1, T-002)
 
 `JSON.stringify` of the parsed double drops digits the export wrote (`9.0423422083395308E-2` became `0.09042342208339531`), so `data/portfolio.json` is rendered from the cell's text turned into plain decimal notation, digit for digit, with an assertion that it parses to the same double. "Unrounded" is then literally true and a re-import of the same export is byte-identical. `fflate` is a devDependency (only the script uses it; a test walks the page's import graph to prove it stays out). The test fixture is the export's XML parts zipped in memory, not a committed binary.

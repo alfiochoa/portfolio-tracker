@@ -90,7 +90,7 @@ When the series does not reach far enough for a window, that tile says "not enou
 
 ## Data sources
 
-Primary: **Yahoo Finance's chart endpoint** (`query1.finance.yahoo.com/v8/finance/chart/<symbol>.F`), which serves the Frankfurt listing of exactly these share classes, in euros, one NAV per working day, keyless. It is unofficial and may change or block; the site says "Yahoo Finance (unofficial)" on the badge, and the snapshot script keeps the previous file when the fetch fails.
+Primary: **Yahoo Finance's chart endpoint** (`query1.finance.yahoo.com/v8/finance/chart/<symbol>.F`), which serves the Frankfurt listing of exactly these share classes, in euros, one NAV per working day, keyless. It is unofficial and may change or block; the site says "Yahoo Finance (unofficial)" on the badge, and the snapshot script keeps the previous file when the fetch fails. Its dates are NAV dates (verified against Vanguard, T-003), but it can miss a day Vanguard priced (2026-10-26 for all eight funds): a missing day is absent from the series, and M2 adds Vanguard's own product pages (the last ten official NAVs) as the second source.
 
 Fallback (to confirm in M1): **Twelve Data**, which lists the same share classes (`0P00011HBK` etc., Frankfurt). Its pricing page puts "Mutual funds NAV" on the Pro plan, so the free key Alfredo offers probably does not serve them; one 1-credit probe decides. If it does not, Twelve Data is dropped from this project and the key stays unused. The key, if any, lives in `.env` (gitignored) and is only ever read by the snapshot script.
 
