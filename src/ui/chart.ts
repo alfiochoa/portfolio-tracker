@@ -157,7 +157,9 @@ export function renderChart(freshness: Freshness, returns: Returns | null): HTML
     const text =
       freshness.state === 'unreadable'
         ? 'The price snapshot could not be read, so there is no line to draw.'
-        : 'Prices are not wired yet, so there is no line to draw.';
+        : freshness.state === 'loading'
+          ? 'Loading prices…'
+          : 'No price snapshot yet. Build one with npm run snapshots, so there is no line to draw.';
     return section('chart', title, placeholder(text));
   }
   const points = portfolioIndex(returns);

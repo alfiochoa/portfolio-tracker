@@ -14,6 +14,9 @@
   --accent-2: #eb6834; /* bonds */
   --up: #006300;
   --down: #b3261e;
+  --ok: #006300; /* the freshness badge's states */
+  --warn: #8a5a00;
+  --error: #b3261e;
   --focus: #2a78d6;
 
   /* Space */
@@ -68,6 +71,9 @@
     --accent-2: #d95926;
     --up: #5cc25c;
     --down: #f07a78;
+    --ok: #5cc25c;
+    --warn: #e0b24a;
+    --error: #f07a78;
     --focus: #7fb0f0;
   }
 }
@@ -83,6 +89,9 @@
   --accent-2: #d95926;
   --up: #5cc25c;
   --down: #f07a78;
+  --ok: #5cc25c;
+  --warn: #e0b24a;
+  --error: #f07a78;
   --focus: #7fb0f0;
 }
 
@@ -147,14 +156,80 @@ code {
   font-weight: var(--weight-strong);
 }
 
+/* The freshness badge: the state in words, and in its colour on the dot, the border and the state words. */
+.badge-wrap {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
 .badge {
-  justify-self: start;
-  padding: var(--space-1) var(--space-3);
-  border: var(--border) solid var(--line);
-  border-radius: var(--radius-pill);
+  --tone: var(--muted);
+  min-height: var(--hit);
+  max-width: 100%;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
+  border: var(--border) solid var(--tone);
+  border-radius: calc(var(--hit) / 2);
   background: var(--surface);
+  color: var(--fg);
+  font: inherit;
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+}
+
+.badge[data-tone='none'] {
+  border-color: var(--line);
+}
+
+.badge[data-tone='ok'] {
+  --tone: var(--ok);
+}
+
+.badge[data-tone='warn'] {
+  --tone: var(--warn);
+}
+
+.badge[data-tone='error'] {
+  --tone: var(--error);
+}
+
+.badge-dot {
+  display: inline-block;
+  width: var(--swatch);
+  height: var(--swatch);
+  margin-right: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--tone);
+}
+
+.badge-states {
+  color: var(--tone);
+  font-weight: var(--weight-strong);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.badge-detail {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  list-style: none;
+  overflow-wrap: break-word;
+}
+
+.badge-detail[hidden] {
+  display: none;
 }
 
 .header-note,

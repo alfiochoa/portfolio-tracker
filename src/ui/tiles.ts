@@ -54,6 +54,8 @@ export function renderTiles(freshness: Freshness, returns: Returns | null): HTML
   const text =
     freshness.state === 'unreadable'
       ? "The price snapshot could not be read, so there are no returns to show."
-      : `Prices are not wired yet. The portfolio's return over ${WINDOWS.join(' · ')} will show here once they are.`;
+      : freshness.state === 'loading'
+        ? 'Loading prices…'
+        : `No price snapshot yet. Build one with npm run snapshots; the portfolio's return over ${WINDOWS.join(' · ')} will show here then.`;
   return section('performance', 'Performance', placeholder(text));
 }
