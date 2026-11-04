@@ -132,13 +132,24 @@ const STATES: readonly string[] = ['ok', 'partial', 'failed'] satisfies Snapshot
 /** An ISO 8601 instant with a time and a zone (`2026-11-04T21:45:00Z`), one `Date.parse` accepts. */
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
+/**
+ * The string is an ISO instant on a real calendar date. `Date.parse` alone is not enough: V8 rolls
+ * `2026-02-30` into March, so the month and the day are checked against that month's length.
+ */
+function isIsoInstant(text: string): boolean {
+  if (!ISO_INSTANT.test(text) || Number.isNaN(Date.parse(text))) return false;
+  const [year, month, day] = text.slice(0, 10).split('-').map(Number) as [number, number, number];
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth;
+}
+
 /** Read a snapshot's text; throws, with the reason, when it is not one. */
 export function parseSnapshot(text: string): Snapshot {
   const s = JSON.parse(text) as Snapshot;
   if (typeof s !== 'object' || s === null || typeof s.funds !== 'object' || s.funds === null || typeof s.generatedAt !== 'string') {
     throw new Error('not a snapshot (no generatedAt or funds)');
   }
-  if (!ISO_INSTANT.test(s.generatedAt) || Number.isNaN(Date.parse(s.generatedAt))) {
+  if (!isIsoInstant(s.generatedAt)) {
     throw new Error(`the snapshot's generatedAt is not an ISO time: ${JSON.stringify(s.generatedAt)}`);
   }
   if (!STATES.includes(s.state)) {
