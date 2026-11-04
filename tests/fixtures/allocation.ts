@@ -5,7 +5,7 @@ const fund = (id: string, shortName: string, kind: Fund['kind'], en: string, es:
   id,
   name: `Vanguard ${shortName} Index Euro - Institutional Plus`,
   shortName,
-  isin: null,
+  isin: 'IE00TEST0000',
   kind,
   assetClass: { es, en },
   sources: { yahoo: `${id.toUpperCase()}.F` },
