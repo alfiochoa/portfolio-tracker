@@ -186,8 +186,9 @@ const BAD_SNAPSHOTS: [string, Snapshot][] = [
   ['bars out of order', (t) => mutate(t, (s) => s.funds.japan!.bars.reverse())],
 ];
 
-function mutate(text: string, change: (s: { funds: Record<string, { bars: [string, number][] }> }) => unknown): string {
-  const s = JSON.parse(text) as { funds: Record<string, { bars: [string, number][] }> };
+type Mutable = { warning?: string; funds: Record<string, { bars: [string, number][] }> };
+function mutate(text: string, change: (s: Mutable) => unknown): string {
+  const s = JSON.parse(text) as Mutable;
   change(s);
   return JSON.stringify(s);
 }
@@ -627,6 +628,23 @@ test.describe('the freshness badge', () => {
     }
     await badge.press('Enter');
     await expect(detail).toBeHidden();
+  });
+
+  test('shows the run’s warning as the detail’s last line, with no change to the badge’s text or colour', async ({ page }, testInfo) => {
+    const warning = "Vanguard failed for 1 of 8 funds, so Yahoo's bars alone are used for them: europe: HTTP 404 (404 | Vanguard UK Professional)";
+    await open(page, (text) => mutate(WITHOUT_DROPPED(text), (s) => (s.warning = warning)));
+    const badge = page.locator('.badge');
+    await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+    await expect(badge).toHaveAttribute('data-tone', 'ok');
+    await badge.click();
+    const detail = page.locator('.badge-detail');
+    await expect(detail).toBeVisible();
+    await expect(detail.locator('li').last()).toHaveText(`Warning: ${warning}`);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    if (process.env.EVIDENCE_DIR) {
+      await page.locator('header').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-badge-warning.png`) });
+    }
   });
 
   test('is PARTIAL with a fund missing its latest date, and lists each fund’s', async ({ page }, testInfo) => {

@@ -12,6 +12,7 @@ import { productUrl } from '../src/lib/vanguard.ts';
 import { vanguardPage } from './fixtures/vanguard/page.ts';
 import type { Fund } from '../src/lib/portfolio.ts';
 import {
+  carryForward,
   differences,
   MAX_GAP_DAYS,
   MIN_BARS,
@@ -237,6 +238,26 @@ describe('mergeRun with Vanguard', () => {
     expect(s.funds.b!.vanguard).toEqual(first().funds.b!.vanguard);
   });
 
+  it('a date Vanguard filled stays after Vanguard’s window moves past it; a second such run changes only generatedAt', () => {
+    const previous = first(); // 2026-10-26 from Vanguard, the ten to 2026-11-03
+    const filled = new Map(previous.funds.a!.bars).get('2026-10-26')!;
+    // A week later: Yahoo still lacks 2026-10-26, and Vanguard's ten are 2026-10-28 … 2026-11-10.
+    const yahoo = yahooBars(66, '2026-11-10');
+    const answers = [withV(ok('a', yahoo), vanguardBars('2026-11-10')), withV(ok('b', yahoo), vanguardBars('2026-11-10'))];
+    const s = snapshotOf(mergeRun(previous, answers, LATER));
+    expect(s.funds.a!.vanguard).toMatchObject({ from: '2026-10-28', to: '2026-11-10' });
+    const nav = new Map(s.funds.a!.bars);
+    expect(nav.get('2026-10-26')).toBe(filled); // carried from the previous file
+    expect(nav.get('2026-10-23')).toBe(new Map(yahoo).get('2026-10-23')); // Yahoo wins where it has a value
+    expect(nav.get('2026-10-23')).not.toBe(new Map(previous.funds.a!.bars).get('2026-10-23'));
+    expect(s.funds.a!.bars.map(([d]) => d)).toEqual(weekdays(66, '2026-11-10').map(([d]) => d).filter((d) => d >= yahoo[0]![0]));
+    const again = snapshotOf(mergeRun(parseSnapshot(renderSnapshot(s)), answers, new Date('2026-11-04T21:50:00Z')));
+    expect(diffLines(renderSnapshot(s), renderSnapshot(again))).toEqual([
+      '-   "generatedAt": "2026-11-04T21:45:00Z",',
+      '+   "generatedAt": "2026-11-04T21:50:00Z",',
+    ]);
+  });
+
   it('Vanguard bars that would leave a gap in the kept history are not laid over, and say why', () => {
     const previous = snapshotOf(mergeRun(null, [ok('a', weekdays(66, '2026-10-01'))], NOW));
     const s = snapshotOf(mergeRun(previous, [withV(fail('a'), vanguardBars())], LATER));
@@ -245,7 +266,15 @@ describe('mergeRun with Vanguard', () => {
   });
 });
 
-describe('overlayBars and differences', () => {
+describe('overlayBars, carryForward and differences', () => {
+  it('carryForward: the previous bar on a date inside the fresh span that the fresh bars lack, nothing outside it', () => {
+    const fresh: Bar[] = [['2026-10-22', 2], ['2026-10-23', 3], ['2026-10-27', 5]];
+    const previous: Bar[] = [['2026-10-21', 1], ['2026-10-23', 30], ['2026-10-26', 4], ['2026-10-28', 6]];
+    expect(carryForward(fresh, previous)).toEqual([['2026-10-22', 2], ['2026-10-23', 3], ['2026-10-26', 4], ['2026-10-27', 5]]);
+    expect(carryForward(fresh, [])).toEqual(fresh);
+    expect(carryForward([], previous)).toEqual([]);
+  });
+
   it('overlayBars: the second wins on a shared date, the rest merged in date order', () => {
     expect(overlayBars([['2026-10-23', 1], ['2026-10-27', 2]], [['2026-10-26', 9], ['2026-10-27', 8], ['2026-10-28', 7]])).toEqual([
       ['2026-10-23', 1],
@@ -674,7 +703,7 @@ describe('npm run snapshots, as a process', () => {
     expect(s.funds.us500).toEqual(before.funds.us500);
   });
 
-  it('one Vanguard page missing: exit 0, state ok, a warning naming the fund, its Yahoo bars in use', () => {
+  it('one Vanguard page missing: exit 0, state ok, a warning naming the fund, its Yahoo bars and 2026-10-26 carried', () => {
     snapshots('healthy');
     const before = parseSnapshot(text());
     const r = snapshots('healthy', 'bad:9177');
@@ -685,7 +714,9 @@ describe('npm run snapshots, as a process', () => {
     expect(s.warning).toBe("Vanguard failed for 1 of 8 funds, so Yahoo's bars alone are used for them: europe: HTTP 404 (404 | Vanguard UK Professional)");
     expect(r.stdout.trim().split('\n').at(-1)).toBe(`Wrote public/data/prices.json: state ok, 8 funds, latest NAV 2026-11-03; ${s.warning}.`);
     expect(s.funds.europe!.vanguard).toEqual({ error: 'HTTP 404 (404 | Vanguard UK Professional)' });
-    expect(s.funds.europe!.bars).toHaveLength(131); // Yahoo's alone: 2026-10-26 is not filled this time
+    // Yahoo's bars, and 2026-10-26 (which Yahoo lacks) carried from the previous file: the hole stays filled.
+    expect(s.funds.europe!.bars).toHaveLength(132);
+    expect(s.funds.europe!.bars).toEqual(before.funds.europe!.bars);
     expect(s.funds.us500).toEqual(before.funds.us500);
   });
 

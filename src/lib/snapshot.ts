@@ -82,6 +82,20 @@ export function overlayBars(base: readonly Bar[], over: readonly Bar[]): Bar[] {
   return [...byDate].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
+/**
+ * `fresh` with `previous`'s bar added on each date between `fresh`'s first and last that `fresh`
+ * lacks: a date Vanguard once filled (2026-10-26, which Yahoo never had) stays when it leaves
+ * Vanguard's ten. `fresh` wins wherever it has a value; dates outside its span are not carried.
+ */
+export function carryForward(fresh: readonly Bar[], previous: readonly Bar[]): Bar[] {
+  if (fresh.length === 0) return [...fresh];
+  const first = fresh[0]![0];
+  const last = fresh.at(-1)![0];
+  const have = new Set(fresh.map(([d]) => d));
+  const carried = previous.filter(([d]) => d > first && d < last && !have.has(d));
+  return carried.length ? overlayBars(carried, fresh) : [...fresh];
+}
+
 /** The dates both have on which the two values differ by more than DIFFERENCE_TOLERANCE. */
 export function differences(yahoo: readonly Bar[], vanguard: readonly Bar[]): { date: string; yahoo: number; vanguard: number }[] {
   const y = new Map<string, number>(yahoo);
@@ -108,8 +122,10 @@ const sameValues = (all: readonly Bar[], some: readonly Bar[]): boolean => {
 /**
  * Merge one run's results (one per fund, in catalogue order) with the previous snapshot.
  *
- * Per fund, the base is Yahoo's bars from this run or, when Yahoo failed, the previous file's
- * (`kept: true`, `error`); Vanguard's bars are laid over it (overlayBars) and recorded in
+ * Per fund, the base is Yahoo's bars from this run, with the previous file's value carried on each
+ * date inside their span that they lack (carryForward: a hole once filled stays filled), or, when
+ * Yahoo failed, the previous file's bars (`kept: true`, `error`); Vanguard's bars are laid over it
+ * (overlayBars: Vanguard wins over both on its dates) and recorded in
  * `vanguard`, or Vanguard's failure is. An entry whose bars, currency and Vanguard bars are what
  * the previous file has keeps its times, so a second run on the same answers changes only
  * `generatedAt`.
@@ -148,7 +164,7 @@ export function mergeRun(previous: Snapshot | null, results: readonly FundResult
   for (const r of results) {
     const before = previous?.funds[r.id];
     const currency = r.ok ? r.currency : before!.currency;
-    let bars = r.ok ? r.bars : before!.bars;
+    let bars = r.ok ? carryForward(r.bars, before?.bars ?? []) : before!.bars;
     let vanguard: VanguardEntry | undefined;
     if (r.vanguard?.ok) {
       const v = r.vanguard.bars;

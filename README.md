@@ -27,9 +27,9 @@ a new fund is added to `data/funds.json` first, with its exact name as the expor
 `npm run snapshots` downloads the last six months of daily prices (NAVs) of every fund in
 `data/funds.json` from Yahoo Finance and rewrites `public/data/prices.json`, the file the page reads.
 It also reads each fund's page on Vanguard's own site, which lists the last ten official prices, and
-uses those where the two overlap or Yahoo has a gap. It prints one line per fund per source and a
-summary. Funds publish a day's NAV the next working day, so the newest price is normally the
-previous working day's. If Yahoo refuses a fund, that fund keeps the prices it already had and the
-file says why (`state: partial`); if both sites refuse them all, the file is kept as it was with
-`state: failed` and the command exits with an error. Running it twice in a row changes nothing but
-the file's timestamp (`generatedAt`).
+uses those where the two overlap or Yahoo has a gap (a gap once filled stays filled). It prints one
+line per fund per source and a summary. Funds publish a day's NAV the next working day, so the
+newest price is normally the previous working day's. If Yahoo refuses a fund, that fund keeps the
+prices it already had and the file says why (`state: partial`); if both sites refuse them all, the
+file is kept as it was with `state: failed` and the command exits with an error. Running it twice in
+a row changes nothing but the file's timestamp (`generatedAt`).
