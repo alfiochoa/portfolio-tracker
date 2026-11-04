@@ -323,6 +323,79 @@ test.describe('the chart', () => {
     await expect(readout).toHaveText('108.49 on 2026-10-01');
   });
 
+  test('puts each date at its place in calendar time, and draws a flat series without NaN', async ({ page }) => {
+    await open(page);
+    // Dates 2026-09-01 … 2026-11-03: a gap of 30 days then 33 days, so x is by day, not by index (63 days in all).
+    const xs = await page.locator('svg.chart .chart-line').evaluate((el) =>
+      el.getAttribute('d')!.split(/[ML]/).filter(Boolean).map((p) => Number(p.trim().split(' ')[0])),
+    );
+    const days = [0, 30, 56, 57, 58, 59, 62, 63]; // 09-01, 10-01, 10-27, 10-28, 10-29, 10-30, 11-02, 11-03
+    expect(xs).toHaveLength(days.length);
+    days.forEach((d, i) => expect(xs[i]!).toBeCloseTo(xs[0]! + (d / 63) * (xs.at(-1)! - xs[0]!), 0));
+
+    // Every NAV constant: the index is 100 throughout; the scale must still have 3 to 5 labelled lines.
+    await page.unroute('**/data/prices.json');
+    await open(page, (text) => {
+      const s = JSON.parse(text) as { funds: Record<string, { bars: [string, number][] }> };
+      for (const f of Object.values(s.funds)) f.bars = f.bars.map(([d]) => [d, f.bars[0]![1]]);
+      return JSON.stringify(s);
+    });
+    const svg = page.locator('svg.chart');
+    await expect(svg.locator('.chart-end')).toHaveText('100.00');
+    const markup = await svg.evaluate((el) => el.outerHTML);
+    expect(markup).not.toMatch(/NaN|Infinity/);
+    const yLabels = await svg.locator('.chart-y text').allTextContents();
+    expect(yLabels.length).toBeGreaterThanOrEqual(3);
+    expect(yLabels.length).toBeLessThanOrEqual(5);
+    expect(yLabels).toContain('100.00');
+    await expect(page.locator('tbody .sparkline')).toHaveCount(8);
+  });
+
+  test('redraws at a new width and keeps the readout on the same date', async ({ page }) => {
+    await open(page);
+    const svg = page.locator('svg.chart');
+    await svg.focus();
+    await page.keyboard.press('ArrowLeft'); // 2026-11-02
+    const readout = page.locator('.chart-readout');
+    await expect(readout).toHaveText('109.40 on 2026-11-02');
+    const before = Number(await svg.getAttribute('width'));
+    await page.setViewportSize({ width: before > 500 ? 360 : 1280, height: 800 });
+    await expect.poll(async () => Number(await svg.getAttribute('width'))).not.toBe(before);
+    const sizes = await svg.evaluate((el: SVGSVGElement) => ({ svg: el.getBoundingClientRect().width, section: el.closest('section')!.getBoundingClientRect().width, drawn: el.viewBox.baseVal.width }));
+    expect(sizes.svg).toBeCloseTo(sizes.section, 0);
+    expect(sizes.drawn).toBeCloseTo(sizes.section, 0);
+    await expect(readout).toHaveText('109.40 on 2026-11-02');
+    await expect(svg.locator('.chart-dot')).toHaveAttribute('visibility', 'visible');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+  });
+
+  test('a finger drags along the line, and a vertical swipe on it still scrolls the page', async ({ page }, testInfo) => {
+    test.skip(!testInfo.project.name.startsWith('phone'), 'touch only');
+    await open(page);
+    const svg = page.locator('svg.chart');
+    await svg.scrollIntoViewIfNeeded();
+    const box = (await svg.boundingBox())!;
+    const readout = page.locator('.chart-readout');
+    const cdp = await page.context().newCDPSession(page);
+    const y = Math.round(box.y + box.height / 2);
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, yy = y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: yy }] });
+    const scrollY = () => page.evaluate(() => window.scrollY);
+    const before = await scrollY();
+    await touch('touchStart', box.x + box.width * 0.9);
+    await touch('touchMove', box.x + box.width * 0.9 - 5);
+    const first = await readout.textContent();
+    for (let x = box.x + box.width * 0.9; x >= box.x + box.width * 0.15; x -= 8) await touch('touchMove', x);
+    await touch('touchEnd', 0);
+    expect(await readout.textContent()).not.toBe(first); // it followed the finger
+    await expect(readout).toHaveAttribute('data-state', 'active'); // and stays when the finger lifts
+    expect(await scrollY()).toBe(before); // a sideways drag does not scroll the page
+    const mid = Math.round(box.x + box.width / 2);
+    await touch('touchStart', mid, y);
+    for (let d = 0; d <= 120; d += 10) await touch('touchMove', mid, y - d);
+    await touch('touchEnd', 0);
+    await expect.poll(scrollY).toBeGreaterThan(before + 20);
+  });
+
   test('a snapshot of one date shows "not enough history" instead of a line', async ({ page }) => {
     await open(page, (text) => {
       const s = JSON.parse(text) as { funds: Record<string, { bars: [string, number][] }> };
