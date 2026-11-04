@@ -73,7 +73,7 @@ docs/                      SPEC, ARCHITECTURE, DESIGN, DECISIONS, CONVENTIONS
   "funds": { "us500": { "currency": "EUR", "fetchedAt": "...", "bars": [["2026-08-04", 591.88], ...] } } }
 ```
 
-`state` is `ok`, `partial` (some funds kept from the previous file; each such fund carries `kept: true` and `error`) or `failed` (nothing fetched; the previous file is written back unchanged with the new `state` and `error`).
+`state` is `ok`, `partial` (some funds kept from the previous file; each such fund carries `kept: true` and `error`, and the file a top-level `error` listing them) or `failed` (nothing fetched; the previous file is written back unchanged with the new `state` and `error`). A fund's `fetchedAt` is when its bars were fetched; a run that gets the same bars again keeps it, so a second run changes only `generatedAt`. The file has one bar per line, so a daily refresh is a short diff.
 
 ## Rules that hold everywhere
 

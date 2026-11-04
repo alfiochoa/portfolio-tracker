@@ -21,3 +21,13 @@ not from today). It rewrites `data/portfolio.json` with the new weights and toda
 allocation's date. If the export names a fund the catalogue (`data/funds.json`) does not know, or
 its weights do not add up to 100 %, it stops, says which row is wrong, and leaves the file as it was;
 a new fund is added to `data/funds.json` first, with its exact name as the export spells it.
+
+## Refresh the prices
+
+`npm run snapshots` downloads the last six months of daily prices (NAVs) of every fund in
+`data/funds.json` from Yahoo Finance and rewrites `public/data/prices.json`, the file the page reads.
+It prints one line per fund and a summary. Funds publish a day's NAV the next working day, so the
+newest price is normally the previous working day's. If Yahoo
+refuses a fund, that fund keeps the prices it already had and the file says why (`state: partial`);
+if it refuses them all, the file is kept as it was with `state: failed` and the command exits with
+an error. Running it twice in a row changes nothing but the file's timestamp (`generatedAt`).
