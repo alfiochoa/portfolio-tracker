@@ -18,7 +18,7 @@
     "id": "europe",
     "name": "Vanguard European Stock Index Euro - Institutional Plus",
     "shortName": "European Stock",
-    "isin": null,
+    "isin": "IE00BFPM9L96",
     "kind": "equity",
     "assetClass": {
       "es": "Acciones Europa",
@@ -33,7 +33,7 @@
     "id": "emerging",
     "name": "Vanguard Emerging Markets Stock Index Euro - Institutional Plus",
     "shortName": "Emerging Markets",
-    "isin": null,
+    "isin": "IE00BFPM9J74",
     "kind": "equity",
     "assetClass": {
       "es": "Acciones economías emergentes",
@@ -48,7 +48,7 @@
     "id": "smallcap",
     "name": "Vanguard Global Small Cap Index Euro - Institutional Plus",
     "shortName": "Global Small Cap",
-    "isin": null,
+    "isin": "IE00BFRTDD83",
     "kind": "equity",
     "assetClass": {
       "es": "Acciones globales pequeña capitalización",
@@ -63,7 +63,7 @@
     "id": "japan",
     "name": "Vanguard Japan Stock Index Euro - Institutional Plus",
     "shortName": "Japan Stock",
-    "isin": null,
+    "isin": "IE00BFPM9P35",
     "kind": "equity",
     "assetClass": {
       "es": "Acciones Japón",
@@ -93,7 +93,7 @@
     "id": "eurocorp",
     "name": "Vanguard Euro Investment Grade Bond Index Euro - Institutional Plus",
     "shortName": "Euro Investment Grade Bond",
-    "isin": null,
+    "isin": "IE00BFPM9X19",
     "kind": "bond",
     "assetClass": {
       "es": "Bonos empresas europeas",

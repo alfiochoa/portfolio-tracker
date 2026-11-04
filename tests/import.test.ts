@@ -168,3 +168,28 @@ it('the committed portfolio.json weights still sum to 1 within 0.0001', () => {
   const committed = JSON.parse(readFileSync(new URL('../data/portfolio.json', import.meta.url), 'utf8')) as { positions: { weight: number }[] };
   expect(Math.abs(committed.positions.reduce((s, p) => s + p.weight, 0) - 1)).toBeLessThanOrEqual(0.0001);
 });
+
+describe('the catalogue the import matches against', () => {
+  // ISO 6166 check digit: letters to numbers (A=10), then Luhn over the digits.
+  const validIsin = (isin: string): boolean => {
+    if (!/^[A-Z]{2}[A-Z0-9]{9}\d$/.test(isin)) return false;
+    const digits = [...isin.slice(0, -1)].map((c) => parseInt(c, 36)).join('');
+    let sum = 0;
+    [...digits].reverse().forEach((d, i) => {
+      const n = Number(d) * (i % 2 === 0 ? 2 : 1);
+      sum += Math.floor(n / 10) + (n % 10);
+    });
+    return (10 - (sum % 10)) % 10 === Number(isin.at(-1));
+  };
+
+  it('the ISIN check rejects a mistyped ISIN', () => {
+    expect(validIsin('IE00BFPM9V94')).toBe(true);
+    expect(validIsin('IE00BFPM9V95')).toBe(false);
+  });
+
+  it.each(catalogue.map((f) => [f.id, f] as const))('%s has a verified ISIN, unique names and a Yahoo symbol', (_, fund) => {
+    expect(fund.isin && validIsin(fund.isin)).toBe(true);
+    expect(fund.sources.yahoo).toMatch(/^0P[0-9A-Z]{8}\.F$/);
+    expect(catalogue.filter((f) => f.name === fund.name || f.isin === fund.isin)).toHaveLength(1);
+  });
+});
