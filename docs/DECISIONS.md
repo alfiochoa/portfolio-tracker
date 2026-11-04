@@ -2,6 +2,10 @@
 
 Newest first. One entry per decision: what was chosen, over what, and why. Keep entries short.
 
+## 2026-11-04: the page tells "no snapshot" from "unreadable" by the HTTP status: 404 is the former, everything else the latter (architect, from builder-1's T-004 report)
+
+The spec names two states for a page without numbers: no snapshot yet (quiet placeholders) and snapshot unreadable (badge `ERROR`). The page fetches `data/prices.json` relative to itself; a 404 means the file is not there (no snapshot), and any other failure (a network error, another status, JSON that does not parse, a snapshot the definitions cannot compute from, such as a fund with no bars) is unreadable and logged to the console with its reason. The fetch is sent with `cache: 'no-cache'` so a snapshot rebuilt today is revalidated rather than served from yesterday's cache; the file is 35 kB, so the revalidation costs nothing worth saving. The page and `scripts/recompute.ts` share `readPrices` (parse, then compute), so a file the oracle refuses is one the page refuses, with the same reason.
+
 ## 2026-11-04: a Yahoo bar carries the NAV date; prices are read back as the shortest 32-bit float (builder-1, T-003)
 
 Checked on all eight funds against Vanguard's UK professional product pages (`vanguard.co.uk/professional/product/fund/<equity|bond>/<id>/<ISIN>`, the last ten NAVs): 72 of 72 fund-dates equal, under the same date, so no shift is applied. Yahoo serves the prices as 32-bit floats (597.1246 arrives as 597.1245727539062); the parser writes the shortest decimal that is the same float, which restores Vanguard's four decimals exactly. A fund's `fetchedAt` is kept when a later run fetches the same bars, so a second run changes only `generatedAt`. The request's User-Agent is the bare `Mozilla/5.0`: full browser strings got 429 from this machine every time.
