@@ -51,7 +51,8 @@ docs/                      SPEC, ARCHITECTURE, DESIGN, DECISIONS, CONVENTIONS
    "isin": "IE00BFPM9V94",
    "kind": "equity",
    "assetClass": { "es": "Acciones Estados Unidos", "en": "US equities" },
-   "sources": { "yahoo": "0P00011HBK.F", "twelvedata": "0P00011HBK" } }]
+   "sources": { "yahoo": "0P00011HBK.F", "twelvedata": "0P00011HBK",
+                "vanguard": { "kind": "equity", "id": "9186" } } }]
 ```
 
 `name` is the match key for the export, character for character. Adding a fund Alfredo's advisor might use is a one-entry change here.
@@ -68,12 +69,16 @@ docs/                      SPEC, ARCHITECTURE, DESIGN, DECISIONS, CONVENTIONS
 
 ```json
 { "generatedAt": "2026-11-04T21:40:00Z",
-  "source": { "name": "Yahoo Finance (unofficial)", "kind": "yahoo" },
+  "source": { "name": "Vanguard (official) + Yahoo Finance (unofficial)", "kind": "vanguard+yahoo" },
   "state": "ok",
-  "funds": { "us500": { "currency": "EUR", "fetchedAt": "...", "bars": [["2026-08-04", 591.88], ...] } } }
+  "funds": { "us500": { "currency": "EUR", "fetchedAt": "...",
+                        "vanguard": { "fetchedAt": "...", "from": "2026-10-21", "to": "2026-11-03", "bars": 10 },
+                        "bars": [["2026-08-04", 591.88], ...] } } }
 ```
 
 `state` is `ok`, `partial` (some funds kept from the previous file; each such fund carries `kept: true` and `error`, and the file a top-level `error` listing them) or `failed` (nothing fetched; the previous file is written back unchanged with the new `state` and `error`). A fund's `fetchedAt` is when its bars were fetched; a run that gets the same bars again keeps it, so a second run changes only `generatedAt`. The file has one bar per line, so a daily refresh is a short diff.
+
+Each fund's bars are Yahoo's six months (or, when Yahoo failed, the previous file's, `kept`) with the last ten NAVs of Vanguard's product page (`vanguard.co.uk/professional/product/fund/<kind>/<id>/<ISIN>`, `src/lib/vanguard.ts`) laid over them: on a date both have, Vanguard's value; a date Yahoo lacks, inserted. The fund's `vanguard` entry says which dates came from Vanguard (`from` to `to`, `bars` of them, every one of Vanguard's ten) and when they were fetched, or `{ "error": "..." }` when the page could not be read; files from before M2 have no `vanguard`, and `parseSnapshot` reads them. `state` follows Yahoo: a Vanguard failure on an otherwise `ok` run is a top-level `warning` naming the funds, and the run is `failed` only when no fund got bars from either source.
 
 ## Rules that hold everywhere
 

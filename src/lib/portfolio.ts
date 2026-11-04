@@ -11,7 +11,16 @@ export interface Fund {
   isin: string;
   kind: Kind;
   assetClass: { es: string; en: string };
-  sources: Record<string, string>;
+  sources: FundSources;
+}
+
+/** What each price source knows the fund by. */
+export interface FundSources {
+  /** Yahoo Finance's symbol for the Frankfurt listing, `0P00011HBK.F`. */
+  yahoo?: string;
+  twelvedata?: string;
+  /** Vanguard UK's product page: `/professional/product/fund/<kind>/<id>/<ISIN>`. */
+  vanguard?: { kind: Kind; id: string };
 }
 
 export interface Portfolio {

@@ -11,7 +11,8 @@
     },
     "sources": {
       "yahoo": "0P00011HBK.F",
-      "twelvedata": "0P00011HBK"
+      "twelvedata": "0P00011HBK",
+      "vanguard": { "kind": "equity", "id": "9186" }
     }
   },
   {
@@ -26,7 +27,8 @@
     },
     "sources": {
       "yahoo": "0P00011HBL.F",
-      "twelvedata": "0P00011HBL"
+      "twelvedata": "0P00011HBL",
+      "vanguard": { "kind": "equity", "id": "9177" }
     }
   },
   {
@@ -41,7 +43,8 @@
     },
     "sources": {
       "yahoo": "0P00011HBQ.F",
-      "twelvedata": "0P00011HBQ"
+      "twelvedata": "0P00011HBQ",
+      "vanguard": { "kind": "equity", "id": "9175" }
     }
   },
   {
@@ -56,7 +59,8 @@
     },
     "sources": {
       "yahoo": "0P00011OE2.F",
-      "twelvedata": "0P00011OE2"
+      "twelvedata": "0P00011OE2",
+      "vanguard": { "kind": "equity", "id": "9191" }
     }
   },
   {
@@ -71,7 +75,8 @@
     },
     "sources": {
       "yahoo": "0P00011HBN.F",
-      "twelvedata": "0P00011HBN"
+      "twelvedata": "0P00011HBN",
+      "vanguard": { "kind": "equity", "id": "9180" }
     }
   },
   {
@@ -86,7 +91,8 @@
     },
     "sources": {
       "yahoo": "0P00011HBR.F",
-      "twelvedata": "0P00011HBR"
+      "twelvedata": "0P00011HBR",
+      "vanguard": { "kind": "bond", "id": "9187" }
     }
   },
   {
@@ -101,7 +107,8 @@
     },
     "sources": {
       "yahoo": "0P00011IIE.F",
-      "twelvedata": "0P00011IIE"
+      "twelvedata": "0P00011IIE",
+      "vanguard": { "kind": "bond", "id": "9188" }
     }
   },
   {
@@ -116,7 +123,8 @@
     },
     "sources": {
       "yahoo": "0P00012I68.F",
-      "twelvedata": "0P00012I68"
+      "twelvedata": "0P00012I68",
+      "vanguard": { "kind": "bond", "id": "9199" }
     }
   }
 ]
