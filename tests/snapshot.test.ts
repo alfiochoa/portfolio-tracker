@@ -365,8 +365,11 @@ describe('npm run snapshots, as a process', () => {
   it('a second run changes only the generatedAt line', () => {
     snapshots('healthy');
     const one = text();
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100); // timestamps have one-second resolution
     expect(snapshots('healthy').status).toBe(0);
-    expect(diffLines(one, text()).filter((l) => !/"generatedAt"/.test(l))).toEqual([]);
+    const changed = diffLines(one, text());
+    expect(changed).toHaveLength(2);
+    expect(changed.every((l) => /"generatedAt"/.test(l))).toBe(true);
   });
 
   it('one symbol unknown: exit 0, state partial, that fund keeps its bars and says why', () => {
