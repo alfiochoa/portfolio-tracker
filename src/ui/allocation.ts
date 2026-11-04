@@ -17,9 +17,7 @@ function legendItem(kind: Kind, weight: number): HTMLElement {
     'li',
     { class: 'legend-item', 'data-kind': kind },
     h('span', { class: 'swatch', 'aria-hidden': 'true' }),
-    h('span', { class: 'legend-label' }, KIND_LABEL[kind]),
-    ' ',
-    h('span', { class: 'num' }, formatPercent(weight)),
+    h('span', { class: 'legend-text' }, `${KIND_LABEL[kind]} `, h('span', { class: 'num' }, formatPercent(weight))),
   );
 }
 

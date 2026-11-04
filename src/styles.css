@@ -281,8 +281,8 @@ code {
 
   .positions thead {
     position: absolute;
-    width: 1px;
-    height: 1px;
+    width: var(--border);
+    height: var(--border);
     overflow: hidden;
     clip-path: inset(50%);
   }

@@ -61,6 +61,9 @@ test('the page shows the allocation and says prices are not wired yet', async ({
   const allocation = page.getByRole('region', { name: 'Allocation' });
   await expect(allocation.getByText('Equities 90.34 %')).toBeVisible();
   await expect(allocation.getByText('Bonds 9.66 %')).toBeVisible();
+  // As a person reads it, on one line each (innerText follows the layout, textContent does not).
+  const legend = (await allocation.locator('.split-legend').innerText()).split('\n');
+  expect(legend).toEqual(['Equities 90.34 %', 'Bonds 9.66 %']);
   await expect(allocation.locator('.class-row')).toHaveCount(8);
 
   // Nothing wider than the screen.
