@@ -10,6 +10,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { formatIndex, portfolioIndex } from '../src/lib/chart.ts';
 import { formatPercent, formatSignedPercent } from '../src/lib/format.ts';
 import { positionsOf, totalWeight, type Fund, type Portfolio } from '../src/lib/portfolio.ts';
 import { readPrices, WINDOWS, type Returns, type WindowReturn } from '../src/lib/returns.ts';
@@ -33,6 +34,14 @@ const cell = (w: WindowReturn, value: (w: Extract<WindowReturn, { enough: true }
   return v === undefined ? '—' : formatSignedPercent(v);
 };
 
+/** The chart's end label: the value index over the 2m window, 100 at its first point (src/ui/chart.ts draws it). */
+function chartLine(returns: Returns): string {
+  const points = portfolioIndex(returns);
+  const last = points.at(-1);
+  if (!last || points.length < 2) return 'Chart:    not enough history to draw a line';
+  return `Chart:    100 on ${points[0]!.date} to ${formatIndex(last.value)} on ${last.date} (${points.length} points)`;
+}
+
 export function report(portfolio: Portfolio, funds: readonly Fund[], returns: Returns, header: string): string {
   const positions = positionsOf(funds, portfolio);
   const last = returns.values.length - 1;
@@ -41,6 +50,7 @@ export function report(portfolio: Portfolio, funds: readonly Fund[], returns: Re
     `Anchor T: ${returns.anchor}`,
     `Latest L: ${returns.latest}   V(L) = ${returns.values[last]}`,
     `Series:   ${returns.dates.length} dates, ${returns.dates[0]} to ${returns.latest}; dropped: ${returns.dropped.join(', ') || 'none'}`,
+    chartLine(returns),
     '',
     table([
       ['Window', 'Start S', 'V(S)', 'Portfolio'],

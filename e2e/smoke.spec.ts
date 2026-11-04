@@ -113,8 +113,8 @@ test('the tiles and the table show the returns computed by hand from the fixture
   );
   expect(spills, 'values wider than their cell').toEqual([]);
 
-  // The chart is T-005's: still its placeholder.
-  await expect(page.getByRole('region', { name: 'Portfolio value, last two months' }).locator('.placeholder')).toBeVisible();
+  // The chart (the 2m index, by hand: V(S_2m) = 0.9217395, so 100 on 2026-09-01 and 108.49 on L)
+  // and the sparklines are the next test's.
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -192,6 +192,150 @@ for (const [name, snapshot] of BAD_SNAPSHOTS) {
   });
 }
 
+/*
+ * The chart, by hand from the same fixture: the 2m window is 2026-09-01 to 2026-11-03, eight series
+ * dates (us500's 2026-10-26 is dropped), each V(t)/V(S) × 100 with V(S) = 0.9217395:
+ *   2026-09-01 100.00 · 2026-10-01 108.49 · 2026-10-27 113.05 · 2026-11-02 109.40 · 2026-11-03 108.49
+ */
+test.describe('the chart', () => {
+  test.use({ hasTouch: true }); // so the phone can tap; the laptop still hovers with a mouse
+
+  test('draws the 2m index with its labels, and the sparklines', async ({ page }, testInfo) => {
+    await open(page);
+    const region = page.getByRole('region', { name: 'Portfolio value, last two months' });
+    await expect(region.locator('.placeholder')).toHaveCount(0);
+    const svg = region.getByRole('img');
+    await expect(svg).toHaveAttribute('aria-label', 'Portfolio value index, from 100 on 2026-09-01 to 108.49 on 2026-11-03.');
+    const line = svg.locator('.chart-line');
+    await expect(line).toHaveAttribute('data-points', '8');
+    expect((await line.getAttribute('d'))!.match(/[ML]/g)).toHaveLength(8);
+    await expect(svg.locator('.chart-end')).toHaveText('108.49');
+    await expect(svg.locator('.chart-hundred')).toHaveCount(1);
+    const yLabels = await svg.locator('.chart-y text').allTextContents();
+    expect(yLabels.length).toBeGreaterThanOrEqual(3);
+    expect(yLabels.length).toBeLessThanOrEqual(5);
+    expect(yLabels).toContain('100');
+    const xLabels = await svg.locator('.chart-x text').allTextContents();
+    expect(xLabels[0]).toBe('2026-09-01');
+    expect(xLabels.at(-1)).toBe('2026-11-03');
+    expect(xLabels).toContain('Oct');
+    await expect(svg.locator('.chart-axis line')).toHaveCount(3); // the axis and the two month boundaries
+
+    // No label runs into another, or out of the SVG.
+    const clashes = await svg.evaluate((el) => {
+      const svgBox = el.getBoundingClientRect();
+      const boxes = [...el.querySelectorAll('text')].map((t) => ({ text: t.textContent, r: t.getBoundingClientRect() }));
+      const out: string[] = [];
+      for (const a of boxes) {
+        if (a.r.left < svgBox.left - 0.5 || a.r.right > svgBox.right + 0.5) out.push(`${a.text} leaves the chart`);
+        for (const b of boxes) {
+          if (a === b || a.text! > b.text!) continue;
+          if (a.r.left < b.r.right && b.r.left < a.r.right && a.r.top < b.r.bottom && b.r.top < a.r.bottom) out.push(`${a.text} / ${b.text}`);
+        }
+      }
+      return out;
+    });
+    expect(clashes, 'overlapping labels').toEqual([]);
+    // Full width on a phone; labels at their own size on every screen.
+    const sizes = await svg.evaluate((el: SVGSVGElement) => ({
+      svg: el.getBoundingClientRect().width,
+      section: el.closest('section')!.getBoundingClientRect().width,
+      font: parseFloat(getComputedStyle(el.querySelector('.chart-y text')!).fontSize),
+      scale: el.getBoundingClientRect().width / el.viewBox.baseVal.width,
+    }));
+    expect(sizes.svg).toBeCloseTo(sizes.section, 0);
+    expect(sizes.font * sizes.scale).toBeGreaterThanOrEqual(11.5);
+
+    // A sparkline per fund, 64 × 20, coloured and labelled by its 2m return.
+    const positions = page.getByRole('region', { name: 'Positions' });
+    await expect(positions.locator('tbody .sparkline')).toHaveCount(8);
+    const us500 = positions.locator('tr[data-fund="us500"] .sparkline');
+    await expect(us500).toHaveAttribute('aria-label', 'US 500, 2m return: +10.00 %');
+    await expect(us500).toHaveAttribute('data-sign', 'up');
+    await expect(us500.locator('path')).toHaveAttribute('data-points', '9'); // its own line keeps 2026-10-26
+    const infl = positions.locator('tr[data-fund="euroinfl"] .sparkline');
+    await expect(infl).toHaveAttribute('aria-label', 'Eurozone Inflation-Linked Bond, 2m return: −3.85 %');
+    await expect(infl).toHaveAttribute('data-sign', 'down');
+    for (const box of await positions.locator('tbody .sparkline').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()))) {
+      expect(box.width).toBe(64);
+      expect(box.height).toBe(20);
+    }
+    const strokes = await page.evaluate(() => {
+      const probe = (value: string) => {
+        const el = document.createElement('span');
+        el.style.color = value;
+        document.body.append(el);
+        const c = getComputedStyle(el).color;
+        el.remove();
+        return c;
+      };
+      const stroke = (f: string) => getComputedStyle(document.querySelector(`tr[data-fund="${f}"] .sparkline path`)!).stroke;
+      return { up: probe('var(--up)'), down: probe('var(--down)'), us500: stroke('us500'), infl: stroke('euroinfl') };
+    });
+    expect(strokes.us500).toBe(strokes.up);
+    expect(strokes.infl).toBe(strokes.down);
+
+    if (process.env.EVIDENCE_DIR) {
+      await region.screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-chart.png`) });
+    }
+  });
+
+  test('reads a date on hover (laptop), on tap (phone) and with the arrow keys', async ({ page }, testInfo) => {
+    await open(page);
+    const svg = page.locator('svg.chart');
+    const readout = page.locator('.chart-readout');
+    await expect(readout).toHaveAttribute('data-state', 'idle');
+    await expect(svg.locator('.chart-dot')).toHaveAttribute('visibility', 'hidden');
+
+    // Aim at the third point (2026-10-27): its x in the SVG's units, scaled to the screen.
+    const target = await svg.evaluate((el: SVGSVGElement) => {
+      const d = el.querySelector('.chart-line')!.getAttribute('d')!;
+      const [x, y] = d.split(/[ML]/).filter(Boolean)[2]!.trim().split(' ').map(Number) as [number, number];
+      const r = el.getBoundingClientRect();
+      const k = r.width / el.viewBox.baseVal.width;
+      return { x: r.left + x * k + 1, y: r.top + y * k + 20 }; // off the line, and a pixel past the date (a phone has 4 px a day): the nearest date wins
+    });
+    if (testInfo.project.name.startsWith('phone')) await page.touchscreen.tap(target.x, target.y);
+    else await page.mouse.move(target.x, target.y);
+    await expect(readout).toHaveAttribute('data-state', 'active');
+    await expect(readout).toHaveText('113.05 on 2026-10-27');
+    await expect(svg.locator('.chart-dot')).toHaveAttribute('visibility', 'visible');
+    if (process.env.EVIDENCE_DIR) {
+      await page.locator('#chart').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-readout.png`) });
+    }
+
+    if (!testInfo.project.name.startsWith('phone')) {
+      await page.mouse.move(0, 0); // the mouse leaves: the readout goes back to its hint
+      await expect(readout).toHaveAttribute('data-state', 'idle');
+    }
+
+    // The keyboard: focus starts on the latest date, the arrows step through the dates.
+    await page.locator('body').click({ position: { x: 1, y: 1 } });
+    await svg.focus();
+    await expect(readout).toHaveText('108.49 on 2026-11-03');
+    await page.keyboard.press('ArrowLeft');
+    await expect(readout).toHaveText('109.40 on 2026-11-02');
+    await page.keyboard.press('Home');
+    await expect(readout).toHaveText('100.00 on 2026-09-01');
+    await page.keyboard.press('ArrowLeft');
+    await expect(readout).toHaveText('100.00 on 2026-09-01');
+    await page.keyboard.press('ArrowRight');
+    await expect(readout).toHaveText('108.49 on 2026-10-01');
+  });
+
+  test('a snapshot of one date shows "not enough history" instead of a line', async ({ page }) => {
+    await open(page, (text) => {
+      const s = JSON.parse(text) as { funds: Record<string, { bars: [string, number][] }> };
+      for (const f of Object.values(s.funds)) f.bars = f.bars.filter(([d]) => d === '2026-11-03');
+      return JSON.stringify(s);
+    });
+    const region = page.getByRole('region', { name: 'Portfolio value, last two months' });
+    await expect(region.locator('.placeholder')).toHaveText(/^Not enough history/);
+    await expect(region.locator('svg')).toHaveCount(0);
+    await expect(page.locator('tbody .sparkline')).toHaveCount(0);
+  });
+});
+
 test('a window the series does not reach says "not enough history"', async ({ page }, testInfo) => {
   // Only the bars from 2026-10-27 on: six series dates, so 1d, 5d and 1w have a start, 1m and 2m do not.
   await open(page, (text) => {
@@ -207,6 +351,12 @@ test('a window the series does not reach says "not enough history"', async ({ pa
     await expect(tile.locator('.tile-start')).toHaveText('prices from 2026-10-27');
     await expect(page.locator(`.total .ret[data-window="${window}"]`)).toHaveText('not enough history');
   }
+  // The chart covers what there is: six dates from 2026-10-27, indexed to 100 there.
+  const chart = page.getByRole('region', { name: 'Portfolio value, last two months' });
+  await expect(chart.locator('.chart-line')).toHaveAttribute('data-points', '6');
+  await expect(chart.getByRole('img')).toHaveAttribute('aria-label', /^Portfolio value index, from 100 on 2026-10-27 to /);
+  await expect(chart.locator('.section-note')).toContainText('Prices start on 2026-10-27');
+  await expect(page.locator('tr[data-fund="us500"] .sparkline')).toHaveAttribute('aria-label', /^US 500, return since 2026-10-27: /);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   if (process.env.EVIDENCE_DIR) {
@@ -226,6 +376,7 @@ for (const state of ['missing', 'unreadable'] as const) {
     expect(titles).toEqual(SECTIONS);
     for (const name of SECTIONS) await expect(page.getByRole('region', { name })).toBeVisible();
     await expect(page.locator('footer')).toContainText('Not investment advice');
+    await expect(page.locator('svg')).toHaveCount(0); // no chart, no sparkline
     // Performance and chart: a quiet placeholder, no number.
     const performance = page.getByRole('region', { name: 'Performance' });
     await expect(performance.locator('.placeholder')).toContainText(
