@@ -1,0 +1,467 @@
+/* Tokens first, named by role so a chosen direction can replace them wholesale (docs/DESIGN.md, once it exists).
+   Components below use only these variables: no literal colour or size outside this block. */
+
+:root {
+  color-scheme: light;
+
+  /* Colour: light theme */
+  --bg: #fcfcfb;
+  --surface: #f2f1ee;
+  --fg: #0b0b0b;
+  --muted: #52514e;
+  --line: #dcdbd6;
+  --accent: #2a78d6; /* equities, and the one interactive colour */
+  --accent-2: #eb6834; /* bonds */
+  --up: #006300;
+  --down: #b3261e;
+  --focus: #2a78d6;
+
+  /* Space */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Type */
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --leading: 1.45;
+  --weight-strong: 600;
+
+  /* Shape and size */
+  --radius: 4px;
+  --radius-pill: 999px;
+  --hit: 44px; /* smallest touch target */
+  --mark-gap: 2px; /* surface gap between touching marks */
+  --bar-thin: 8px;
+  --track: 4px;
+  --swatch: 10px;
+  --border: 1px;
+  --focus-ring: 2px;
+  --page-max: 60rem;
+  --gutter: var(--space-4);
+}
+
+/* Dark: the same roles, stepped for the dark surface. Follows the system unless data-theme says light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #1a1a19;
+    --surface: #242422;
+    --fg: #f0efec;
+    --muted: #c3c2b7;
+    --line: #3b3a37;
+    --accent: #3987e5;
+    --accent-2: #d95926;
+    --up: #5cc25c;
+    --down: #f07a78;
+    --focus: #7fb0f0;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #1a1a19;
+  --surface: #242422;
+  --fg: #f0efec;
+  --muted: #c3c2b7;
+  --line: #3b3a37;
+  --accent: #3987e5;
+  --accent-2: #d95926;
+  --up: #5cc25c;
+  --down: #f07a78;
+  --focus: #7fb0f0;
+}
+
+/* Base */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: var(--text-md);
+  line-height: var(--leading);
+  -webkit-text-size-adjust: 100%;
+}
+
+#app {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--space-5) var(--gutter) var(--space-7);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+:focus-visible {
+  outline: var(--focus-ring) solid var(--focus);
+  outline-offset: var(--focus-ring);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Header */
+
+.site-header {
+  display: grid;
+  gap: var(--space-2);
+  padding-bottom: var(--space-5);
+  border-bottom: var(--border) solid var(--line);
+}
+
+.site-title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-strong);
+}
+
+.badge {
+  justify-self: start;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.header-note,
+.section-note {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* Sections */
+
+.sections {
+  display: grid;
+  gap: var(--space-6);
+  padding-top: var(--space-5);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.section-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+}
+
+.subsection-title {
+  margin-top: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
+
+.placeholder {
+  padding: var(--space-4);
+  border: var(--border) dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* Positions: a table on a laptop */
+
+.positions {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.positions th,
+.positions td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--border) solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.positions th.num,
+.positions td.num {
+  text-align: right;
+}
+
+.positions thead th {
+  color: var(--muted);
+  font-weight: var(--weight-strong);
+  font-size: var(--text-xs);
+}
+
+.positions td.class {
+  color: var(--muted);
+}
+
+.positions .ret {
+  color: var(--muted);
+}
+
+.positions .total th,
+.positions .total td {
+  border-bottom: none;
+  border-top: calc(var(--border) * 2) solid var(--fg);
+  font-weight: var(--weight-strong);
+}
+
+.positions .weight {
+  font-weight: var(--weight-strong);
+}
+
+.fund-name {
+  min-height: var(--hit);
+  margin: 0 calc(var(--space-2) * -1);
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  text-align: left;
+  text-decoration: underline dotted var(--muted);
+  text-underline-offset: var(--space-1);
+  cursor: pointer;
+}
+
+.fund-name:hover {
+  background: var(--surface);
+}
+
+.fund-full {
+  display: block;
+  padding-bottom: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.fund-full[hidden] {
+  display: none;
+}
+
+/* Positions: one card per fund on a phone */
+
+@media (max-width: 40rem) {
+  .positions,
+  .positions thead,
+  .positions tbody,
+  .positions tfoot {
+    display: block;
+  }
+
+  .positions thead {
+    position: absolute;
+    width: var(--border);
+    height: var(--border);
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .positions tr {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    column-gap: var(--space-2);
+    padding: var(--space-2) 0 var(--space-3);
+    border-bottom: var(--border) solid var(--line);
+  }
+
+  .positions th,
+  .positions td,
+  .positions .total th,
+  .positions .total td {
+    padding: 0;
+    border: none;
+  }
+
+  .positions td.fund,
+  .positions .total-label {
+    grid-column: 1 / 4;
+    grid-row: 1;
+  }
+
+  .positions td.weight {
+    grid-column: 4 / 6;
+    grid-row: 1;
+    align-self: start;
+    /* On the fund name's line, even when the full name is open under it. */
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: var(--hit);
+    font-size: var(--text-md);
+  }
+
+  .positions .total td.weight {
+    min-height: 0;
+    align-self: center;
+  }
+
+  .positions td.class {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: var(--text-xs);
+  }
+
+  .positions td.ret {
+    grid-row: 3;
+    padding-top: var(--space-2);
+    text-align: left;
+  }
+
+  .positions td.ret::before {
+    content: attr(data-window);
+    display: block;
+    color: var(--muted);
+    font-size: var(--text-xs);
+  }
+
+  .positions .total {
+    border-bottom: none;
+    border-top: calc(var(--border) * 2) solid var(--fg);
+  }
+
+  .positions .total-label {
+    align-self: center;
+    font-size: var(--text-md);
+  }
+
+  .fund-full {
+    padding-bottom: var(--space-1);
+  }
+}
+
+/* Allocation */
+
+.split-bar {
+  display: flex;
+  gap: var(--mark-gap);
+  height: var(--bar-thin);
+}
+
+.split-seg {
+  flex: var(--share) 0 0;
+  border-radius: var(--radius-pill);
+}
+
+[data-kind='equity'] {
+  --kind: var(--accent);
+}
+
+[data-kind='bond'] {
+  --kind: var(--accent-2);
+}
+
+.split-seg,
+.swatch,
+.class-fill {
+  background: var(--kind);
+}
+
+.swatch {
+  display: inline-block;
+  flex: none;
+  width: var(--swatch);
+  height: var(--swatch);
+  border-radius: var(--radius-pill);
+}
+
+.split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--weight-strong);
+}
+
+.classes {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.class-row {
+  display: grid;
+  grid-template-columns: var(--swatch) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+}
+
+.class-track {
+  grid-column: 2 / -1;
+  height: var(--track);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+
+.class-fill {
+  display: block;
+  width: calc(var(--share) * 100%);
+  height: 100%;
+  border-radius: var(--radius-pill);
+}
+
+/* Footer */
+
+.site-footer {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-7);
+  padding-top: var(--space-4);
+  border-top: var(--border) solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* A laptop: allocation sits beside nothing yet; give the table room and the page more air. */
+
+@media (min-width: 64rem) {
+  #app {
+    padding-top: var(--space-6);
+  }
+
+  .sections {
+    gap: var(--space-7);
+  }
+}

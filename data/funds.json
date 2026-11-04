@@ -1,0 +1,122 @@
+[
+  {
+    "id": "us500",
+    "name": "Vanguard US 500 Stock Index Euro - Institutional Plus",
+    "shortName": "US 500",
+    "isin": "IE00BFPM9V94",
+    "kind": "equity",
+    "assetClass": {
+      "es": "Acciones Estados Unidos",
+      "en": "US equities"
+    },
+    "sources": {
+      "yahoo": "0P00011HBK.F",
+      "twelvedata": "0P00011HBK"
+    }
+  },
+  {
+    "id": "europe",
+    "name": "Vanguard European Stock Index Euro - Institutional Plus",
+    "shortName": "European Stock",
+    "isin": null,
+    "kind": "equity",
+    "assetClass": {
+      "es": "Acciones Europa",
+      "en": "European equities"
+    },
+    "sources": {
+      "yahoo": "0P00011HBL.F",
+      "twelvedata": "0P00011HBL"
+    }
+  },
+  {
+    "id": "emerging",
+    "name": "Vanguard Emerging Markets Stock Index Euro - Institutional Plus",
+    "shortName": "Emerging Markets",
+    "isin": null,
+    "kind": "equity",
+    "assetClass": {
+      "es": "Acciones economías emergentes",
+      "en": "Emerging-market equities"
+    },
+    "sources": {
+      "yahoo": "0P00011HBQ.F",
+      "twelvedata": "0P00011HBQ"
+    }
+  },
+  {
+    "id": "smallcap",
+    "name": "Vanguard Global Small Cap Index Euro - Institutional Plus",
+    "shortName": "Global Small Cap",
+    "isin": null,
+    "kind": "equity",
+    "assetClass": {
+      "es": "Acciones globales pequeña capitalización",
+      "en": "Global small caps"
+    },
+    "sources": {
+      "yahoo": "0P00011OE2.F",
+      "twelvedata": "0P00011OE2"
+    }
+  },
+  {
+    "id": "japan",
+    "name": "Vanguard Japan Stock Index Euro - Institutional Plus",
+    "shortName": "Japan Stock",
+    "isin": null,
+    "kind": "equity",
+    "assetClass": {
+      "es": "Acciones Japón",
+      "en": "Japanese equities"
+    },
+    "sources": {
+      "yahoo": "0P00011HBN.F",
+      "twelvedata": "0P00011HBN"
+    }
+  },
+  {
+    "id": "eurogov",
+    "name": "Vanguard Euro Government Bond Index - Institutional Plus",
+    "shortName": "Euro Government Bond",
+    "isin": "IE00BFPM9W02",
+    "kind": "bond",
+    "assetClass": {
+      "es": "Bonos gobiernos europeos",
+      "en": "Euro government bonds"
+    },
+    "sources": {
+      "yahoo": "0P00011HBR.F",
+      "twelvedata": "0P00011HBR"
+    }
+  },
+  {
+    "id": "eurocorp",
+    "name": "Vanguard Euro Investment Grade Bond Index Euro - Institutional Plus",
+    "shortName": "Euro Investment Grade Bond",
+    "isin": null,
+    "kind": "bond",
+    "assetClass": {
+      "es": "Bonos empresas europeas",
+      "en": "Euro corporate bonds"
+    },
+    "sources": {
+      "yahoo": "0P00011IIE.F",
+      "twelvedata": "0P00011IIE"
+    }
+  },
+  {
+    "id": "euroinfl",
+    "name": "Vanguard Eurozone Inflation-Linked Bond Index Euro - Institutional Plus",
+    "shortName": "Eurozone Inflation-Linked Bond",
+    "isin": "IE00BGCZ0719",
+    "kind": "bond",
+    "assetClass": {
+      "es": "Bonos europeos ligados a la inflación",
+      "en": "Euro inflation-linked bonds"
+    },
+    "sources": {
+      "yahoo": "0P00012I68.F",
+      "twelvedata": "0P00012I68"
+    }
+  }
+]
