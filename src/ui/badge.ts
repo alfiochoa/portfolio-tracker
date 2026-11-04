@@ -1,7 +1,8 @@
 // The header: the name, the freshness badge, and the note on how funds are priced.
 // The badge is a button: its text says the state in words, its dot and border in the state's
 // colour (the --ok, --warn, --error tokens); hovering shows the detail as a tooltip, and a tap,
-// a click or Enter opens it under the badge.
+// a click or Enter opens it under the badge. Escape, or a click or tap outside the badge and its
+// detail, closes it again.
 import type { Freshness } from '../lib/freshness.ts';
 import { h } from './dom.ts';
 
@@ -38,6 +39,35 @@ function pieces(freshness: Freshness): (Node | string)[] {
   return out;
 }
 
+/** Close the open detail, if any; with `refocus`, focus goes back to the badge when it was inside the detail's wrap. */
+function closeDetail(target: EventTarget | null, refocus: boolean): void {
+  const button = document.querySelector<HTMLButtonElement>('.badge[aria-expanded="true"]');
+  const wrap = button?.closest('.badge-wrap');
+  if (!button || !wrap) return;
+  if (!refocus && target instanceof Node && wrap.contains(target)) return;
+  button.setAttribute('aria-expanded', 'false');
+  const detail = document.getElementById(DETAIL_ID);
+  if (detail) detail.hidden = true;
+  if (refocus && wrap.contains(document.activeElement)) button.focus();
+}
+
+/**
+ * One pair of document listeners for every badge the page renders (it re-renders the header on
+ * each load): Escape closes the detail and leaves focus on the badge; a click or tap anywhere
+ * outside the badge and its detail closes it.
+ */
+let listening = false;
+function listenOnce(): void {
+  if (listening) return;
+  listening = true;
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDetail(e.target, true);
+  });
+  // pointerup, not click: iOS Safari sends no click to the document for a tap on plain text, and a
+  // touch that becomes a scroll ends in pointercancel, so scrolling past does not close it.
+  document.addEventListener('pointerup', (e) => closeDetail(e.target, false));
+}
+
 export function renderBadge(freshness: Freshness): HTMLElement {
   const detail = h(
     'ul',
@@ -62,6 +92,7 @@ export function renderBadge(freshness: Freshness): HTMLElement {
     button.setAttribute('aria-expanded', String(open));
     detail.hidden = !open;
   });
+  listenOnce();
   return h('div', { class: 'badge-wrap' }, button, detail);
 }
 

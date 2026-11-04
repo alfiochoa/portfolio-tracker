@@ -18,6 +18,8 @@ import { h } from './ui/dom.ts';
 
 /** Relative to the page, so the site also works under a sub-path. */
 const SNAPSHOT_URL = 'data/prices.json';
+/** A snapshot that has not answered (headers and body) by then is an ERROR, not "loading" forever. */
+const FETCH_LIMIT_MS = 15_000;
 
 /** The one clock (ARCHITECTURE rule 7): freshness is judged against it. The e2e fakes it with Playwright's clock. */
 const now = (): Date => new Date();
@@ -39,12 +41,22 @@ interface Loaded {
 /** The snapshot and its returns, or why there are none. Never rejects. */
 async function loadPrices(): Promise<Loaded> {
   let text: string | undefined;
+  // setTimeout and abort(), not AbortSignal.timeout(): the e2e's fake clock can advance a setTimeout.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_LIMIT_MS);
   try {
-    // no-cache: revalidate, so a snapshot rebuilt today is not served from yesterday's cache.
-    const response = await fetch(SNAPSHOT_URL, { cache: 'no-cache' });
-    if (response.status === 404) return { prices: { kind: 'missing' }, returns: null, funds: null };
-    if (!response.ok) throw new Error(`the snapshot answered HTTP ${response.status}`);
-    text = await response.text();
+    try {
+      // no-cache: revalidate, so a snapshot rebuilt today is not served from yesterday's cache.
+      const response = await fetch(SNAPSHOT_URL, { cache: 'no-cache', signal: controller.signal });
+      if (response.status === 404) return { prices: { kind: 'missing' }, returns: null, funds: null };
+      if (!response.ok) throw new Error(`the snapshot answered HTTP ${response.status}`);
+      text = await response.text();
+    } catch (e) {
+      if (controller.signal.aborted) throw new Error(`the snapshot did not answer in ${FETCH_LIMIT_MS / 1000} s`, { cause: e });
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
     const { snapshot, returns } = readPrices(allocation, text);
     const facts = seriesFacts(returns, fundIds, snapshot.funds);
     return { prices: { kind: 'loaded', snapshot, facts }, returns, funds: snapshot.funds };
@@ -79,5 +91,20 @@ function render({ prices, returns, funds }: Loaded): void {
   );
 }
 
+/** Each load is numbered; only the latest one's answer is rendered, so a slow earlier answer never overwrites a newer one. */
+let latestLoad = 0;
+function load(): void {
+  const mine = ++latestLoad;
+  void loadPrices().then((loaded) => {
+    if (mine === latestLoad) render(loaded);
+  });
+}
+
 render({ prices: { kind: 'loading' }, returns: null, funds: null });
-void loadPrices().then(render);
+load();
+
+// A tab left open overnight: when it is shown again, fetch the snapshot again (it may have been
+// rebuilt) and judge it against the clock as it is now. Only on a return to the tab, not on focus.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') load();
+});

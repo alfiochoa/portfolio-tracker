@@ -127,11 +127,25 @@ export function renderSnapshot(s: Snapshot): string {
   return ['{', ...head, '  "funds": {', funds.join(',\n'), '  }', '}', ''].join('\n');
 }
 
-/** Read a previous snapshot's text; throws when it is not one. */
+const STATES: readonly string[] = ['ok', 'partial', 'failed'] satisfies SnapshotState[];
+
+/** An ISO 8601 instant with a time and a zone (`2026-11-04T21:45:00Z`), one `Date.parse` accepts. */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** Read a snapshot's text; throws, with the reason, when it is not one. */
 export function parseSnapshot(text: string): Snapshot {
   const s = JSON.parse(text) as Snapshot;
   if (typeof s !== 'object' || s === null || typeof s.funds !== 'object' || s.funds === null || typeof s.generatedAt !== 'string') {
     throw new Error('not a snapshot (no generatedAt or funds)');
+  }
+  if (!ISO_INSTANT.test(s.generatedAt) || Number.isNaN(Date.parse(s.generatedAt))) {
+    throw new Error(`the snapshot's generatedAt is not an ISO time: ${JSON.stringify(s.generatedAt)}`);
+  }
+  if (!STATES.includes(s.state)) {
+    throw new Error(`the snapshot's state is not ok, partial or failed: ${JSON.stringify(s.state ?? null)}`);
+  }
+  if (typeof s.source !== 'object' || s.source === null || typeof s.source.name !== 'string') {
+    throw new Error('the snapshot does not name its source');
   }
   for (const [id, f] of Object.entries(s.funds)) {
     if (!Array.isArray(f.bars) || typeof f.fetchedAt !== 'string' || typeof f.currency !== 'string') {
