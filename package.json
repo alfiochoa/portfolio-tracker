@@ -15,7 +15,8 @@
     "test": "vitest run",
     "check": "tsc --noEmit && eslint . && vitest run",
     "e2e": "playwright test",
-    "import": "node scripts/import-portfolio.ts"
+    "import": "node scripts/import-portfolio.ts",
+    "snapshots": "node --env-file-if-exists=.env scripts/build-snapshots.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
