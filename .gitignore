@@ -1,2 +1,12 @@
 # Agent team live state (board, task files, reports, evidence). Shared by absolute path, not by git.
 .team/
+# Secrets (the Twelve Data key, if used): read only by scripts/build-snapshots.ts
+.env
+# The owner's export: personal, binary; data/portfolio.json is what the product reads
+distribucion_agregada_cartera.xlsx
+# Build and tool output
+node_modules
+dist
+playwright-report
+test-results
+scripts/__pycache__/
