@@ -733,3 +733,88 @@ test('the allocation shows before the snapshot answers, and the performance sect
   await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
   await expect(page.locator('.tile')).toHaveCount(5);
 });
+
+// The freshness rule at its edges, on the fixture cut off at a date L (every fund ends there). "Two weekdays
+// before today", a Saturday or a Sunday counting as the Monday after: derived by hand from the 2026 calendar
+// (2026-10-29 Thu, 10-30 Fri, 10-31 Sat, 11-01 Sun, 11-02 Mon, 11-03 Tue).
+test.describe('the freshness rule at its edges', () => {
+  const upTo = (last: string) => (text: string) =>
+    mutate(WITHOUT_DROPPED(text), (s) => {
+      for (const fund of Object.values(s.funds)) fund.bars = fund.bars.filter(([d]) => d <= last);
+    });
+
+  for (const [last, today, state] of [
+    ['2026-10-29', '2026-11-02', 'FRESH'], // Monday, L = the Thursday before
+    ['2026-10-28', '2026-11-02', 'STALE'], // Monday, L = the Wednesday
+    ['2026-10-29', '2026-10-31', 'FRESH'], // Saturday counts as Monday
+    ['2026-10-29', '2026-11-01', 'FRESH'], // Sunday too
+    ['2026-10-28', '2026-11-01', 'STALE'],
+    ['2026-10-30', '2026-11-03', 'FRESH'], // Tuesday, L = the Friday
+    ['2026-10-29', '2026-11-03', 'STALE'],
+  ] as const) {
+    test(`L ${last}, viewed on ${today}: ${state}`, async ({ page }) => {
+      await open(page, upTo(last), `${today}T11:00:00Z`);
+      await expect(page.locator('.badge')).toHaveText(new RegExp(`^NAV as of ${last} · snapshot 2026-11-04 06:30 UTC · ${state}$`));
+      await expect(page.locator('.badge')).toHaveAttribute('data-tone', state === 'FRESH' ? 'ok' : 'warn');
+    });
+  }
+
+  test('a date the series dropped before the 2m window is not PARTIAL; a fund a day ahead of the others is', async ({ page }) => {
+    await open(page, (text) => mutate(WITHOUT_DROPPED(text), (s) => s.funds.us500!.bars.unshift(['2026-08-31', 90])));
+    await expect(page.locator('.badge')).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+    await page.unroute('**/data/prices.json');
+    await page.route('**/data/prices.json', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: mutate(WITHOUT_DROPPED(FIXTURE), (s) => s.funds.us500!.bars.push(['2026-11-04', 111])) }),
+    );
+    await page.reload();
+    const badge = page.locator('.badge');
+    await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH · PARTIAL');
+    await badge.click();
+    await expect(page.locator('.badge-detail li', { hasText: 'US 500: ' })).toHaveText('US 500: 2026-11-04');
+    await expect(page.locator('.badge-detail li', { hasText: 'European Stock: ' })).toHaveText('European Stock: 2026-11-03 (behind)');
+  });
+
+  test('a source name and an error that look like markup are shown as text', async ({ page }) => {
+    await open(page, (text) =>
+      JSON.stringify(Object.assign(JSON.parse(WITHOUT_DROPPED(text)), { source: { name: '<img src=x onerror=window.__x=1>', kind: 'yahoo' }, state: 'failed', error: '<b>bold</b>' })),
+    );
+    await page.locator('.badge').click();
+    await expect(page.locator('.badge-detail li').first()).toHaveText('Source: <img src=x onerror=window.__x=1>');
+    await expect(page.locator('.badge-detail li').last()).toContainText('<b>bold</b>');
+    await expect(page.locator('.badge-detail img, .badge-detail b')).toHaveCount(0);
+  });
+});
+
+// The same instant is Friday in Madrid and still Thursday evening in New York: the viewer's own date decides.
+test.describe('the viewer’s time zone decides the date', () => {
+  const LATE = '2026-11-05T23:30:00Z';
+  test('Madrid, 00:30 on Friday: the NAV of Tuesday is STALE', async ({ page }) => {
+    await open(page, WITHOUT_DROPPED, LATE);
+    await expect(page.locator('.badge')).toContainText('STALE');
+  });
+  test.describe('New York', () => {
+    test.use({ timezoneId: 'America/New_York' });
+    test('the same instant, 18:30 on Thursday: FRESH, and the snapshot time in New York time', async ({ page }) => {
+      await open(page, WITHOUT_DROPPED, LATE);
+      await expect(page.locator('.badge')).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+      await page.locator('.badge').click();
+      await expect(page.locator('.badge-detail li').nth(1)).toHaveText('Snapshot built 2026-11-04 06:30 UTC (2026-11-04 01:30 GMT-5 your time)');
+    });
+  });
+});
+
+test.describe('the badge on a touch screen and from the keyboard', () => {
+  test.use({ hasTouch: true });
+  test('a tap opens the detail and a second tap closes it; Space opens it from the keyboard', async ({ page }) => {
+    await open(page, WITHOUT_DROPPED);
+    const badge = page.locator('.badge');
+    await badge.tap();
+    await expect(badge).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.badge-detail')).toBeVisible();
+    await badge.tap();
+    await expect(page.locator('.badge-detail')).toBeHidden();
+    await badge.focus();
+    await page.keyboard.press('Space');
+    await expect(page.locator('.badge-detail')).toBeVisible();
+  });
+});
