@@ -7,8 +7,8 @@ export interface Fund {
   /** The name as the advisor's export spells it: the match key, character for character. */
   name: string;
   shortName: string;
-  /** null until T-002 has verified it against two public sources. */
-  isin: string | null;
+  /** Verified against Vanguard's product page and a second public source (T-002, 2026-11-04). */
+  isin: string;
   kind: Kind;
   assetClass: { es: string; en: string };
   sources: Record<string, string>;

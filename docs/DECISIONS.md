@@ -2,6 +2,14 @@
 
 Newest first. One entry per decision: what was chosen, over what, and why. Keep entries short.
 
+## 2026-11-04: the import keeps the export's own digits for each weight (builder-1, T-002)
+
+`JSON.stringify` of the parsed double drops digits the export wrote (`9.0423422083395308E-2` became `0.09042342208339531`), so `data/portfolio.json` is rendered from the cell's text turned into plain decimal notation, digit for digit, with an assertion that it parses to the same double. "Unrounded" is then literally true and a re-import of the same export is byte-identical. `fflate` is a devDependency (only the script uses it; a test walks the page's import graph to prove it stays out). The test fixture is the export's XML parts zipped in memory, not a committed binary.
+
+## 2026-11-04: ISIN sources, and one to avoid (builder-1, T-002)
+
+Each fund's ISIN was verified on Vanguard's own product page and on Finect (table in the T-002 report). Rankia's list of the Indexa/Finizens funds swaps the two bond ISINs (W02 is the government bond, X19 the corporate); it is not a source for this project.
+
 ## 2026-11-04: TypeScript pinned to 6.0.x (builder-1, T-001)
 
 typescript-eslint 8.72 supports TypeScript `<6.1`, so `typescript` is `^6.0.3` rather than the current 7.x; raise it when typescript-eslint does. `npm audit` reports one moderate advisory (minimatch, through eslint only, dev-time); fixing it would mean downgrading eslint to 9, so it is left.
