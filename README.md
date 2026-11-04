@@ -63,7 +63,7 @@ Neither needs a key or an account. The browser never calls either: only `npm run
 - **A buy-and-hold of the exported allocation**, valued backwards and forwards from the export's date, not the advisor's actual trades or rebalancing.
 - **"Today" is usually yesterday.** A fund publishes a day's NAV the next working day, so the newest price is normally the previous working day's.
 - **Freshness is a rule**, not a promise: `FRESH` means the newest NAV is at most two weekdays old; a bank holiday can make it look `STALE` for a day.
-- **The sources can miss a day.** Yahoo skipped 2026-10-26 for all eight funds; Vanguard's ten days fill such holes only while they are recent.
+- **The sources can miss a day.** Yahoo skipped 2026-10-26 for all eight funds; a hole inside Vanguard's last ten days is filled and stays filled, but a day missing from both stays missing.
 - **Tested in Chromium only** (phone, tablet and laptop sizes); other browsers should work but are not checked.
 - **Not investment advice.**
 
