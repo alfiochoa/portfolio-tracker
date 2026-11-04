@@ -130,7 +130,7 @@ export function renderPositions(
           ? 'Tap a fund for its full name. No returns: the price snapshot could not be read.'
           : freshness.state === 'loading'
             ? 'Tap a fund for its full name. Loading prices…'
-            : 'Tap a fund for its full name. Returns appear once prices are wired.',
+            : 'Tap a fund for its full name. Returns appear once a snapshot is built.',
     ),
   );
 }

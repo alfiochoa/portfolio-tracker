@@ -53,8 +53,10 @@ export interface Freshness {
   /** The SPEC's states, in the order the badge says them; empty while loading or with no snapshot. */
   states: BadgeState[];
   tone: Tone;
-  /** The badge's own text: `NAV as of <L> · snapshot <time> · <STATE>`. */
+  /** The badge's own text: `NAV as of <L> · snapshot <time> · <STATE>`, then ` · run partial` or ` · run failed` when the snapshot run was not ok. */
   text: string;
+  /** The snapshot run's own state when it was not `ok` (loaded only; the badge says it after the states). */
+  run?: 'partial' | 'failed';
   /** The detail the badge opens on hover or tap, one line each. */
   details: string[];
   anchorDate: string;
@@ -236,12 +238,15 @@ export function assessFreshness({ anchorDate, prices, now, timeZone, names = {} 
     );
   }
   details.push(...runLines(snapshot));
+  // A run that failed writes back the previous file, whose L can still be FRESH: the badge says so itself.
+  const run = snapshot.state === 'partial' || snapshot.state === 'failed' ? snapshot.state : undefined;
 
   return {
     state: 'loaded',
     states,
-    tone: fresh && !partial ? 'ok' : 'warn',
-    text: `NAV as of ${L} · snapshot ${utcTime(snapshot.generatedAt)} · ${states.join(' · ')}`,
+    tone: fresh && !partial && !run ? 'ok' : 'warn',
+    text: `NAV as of ${L} · snapshot ${utcTime(snapshot.generatedAt)} · ${states.join(' · ')}${run ? ` · run ${run}` : ''}`,
+    run,
     details,
     anchorDate,
     latest: L,

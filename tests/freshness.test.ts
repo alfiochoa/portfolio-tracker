@@ -11,6 +11,7 @@ import {
   type SnapshotMeta,
 } from '../src/lib/freshness.ts';
 import { computeReturns } from '../src/lib/returns.ts';
+import { badgeLines } from '../scripts/recompute.ts';
 
 const ANCHOR = '2026-11-04';
 const TZ = 'Europe/Madrid';
@@ -168,19 +169,33 @@ describe('ERROR', () => {
 });
 
 describe('the snapshot run’s own state', () => {
-  it('is in the detail when partial, with the recorded error', () => {
+  it('is on the badge and in the detail when partial, with the recorded error, in the warn colour', () => {
     const f = assess({}, {}, { state: 'partial', error: '1 of 8 funds kept from the previous snapshot: japan: HTTP 429' });
+    expect(f.text).toBe('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH · run partial');
+    expect(f.states).toEqual(['FRESH']);
+    expect(f.run).toBe('partial');
+    expect(f.tone).toBe('warn');
     expect(f.details.at(-1)).toBe('The snapshot run was partial: 1 of 8 funds kept from the previous snapshot: japan: HTTP 429');
   });
 
-  it('is in the detail when failed, with the recorded error', () => {
-    const f = assess({ now: at('2026-11-06') }, {}, { state: 'failed', error: 'every fund failed: …' });
-    expect(f.states).toEqual(['STALE']);
+  it('is on the badge and in the detail when failed, even while the previous file’s L is still FRESH', () => {
+    const f = assess({}, {}, { state: 'failed', error: 'every fund failed: …' });
+    expect(f.text).toBe('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH · run failed');
+    expect(f.states).toEqual(['FRESH']);
+    expect(f.tone).toBe('warn');
     expect(f.details.at(-1)).toBe('The last snapshot run failed, so these are the previous prices: every fund failed: …');
   });
 
+  it('comes after all the states', () => {
+    const f = assess({ now: at('2026-11-06') }, { droppedIn2m: ['2026-10-26'] }, { state: 'failed', error: 'x' });
+    expect(f.text).toBe('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · STALE · PARTIAL · run failed');
+  });
+
   it('adds nothing when ok', () => {
-    expect(assess().details.some((d) => d.startsWith('The snapshot run') || d.startsWith('The last snapshot'))).toBe(false);
+    const f = assess();
+    expect(f.run).toBeUndefined();
+    expect(f.text.endsWith('· FRESH')).toBe(true);
+    expect(f.details.some((d) => d.startsWith('The snapshot run') || d.startsWith('The last snapshot'))).toBe(false);
   });
 });
 
@@ -198,5 +213,17 @@ describe('before there are prices', () => {
     expect(f.text).toBe('Allocation as of 2026-11-04 · no prices yet');
     expect(f.state).toBe('no-snapshot');
     expect(hasPrices(f)).toBe(false);
+  });
+});
+
+describe('the oracle (scripts/recompute.ts)', () => {
+  it('prints the badge, its detail indented, and the instant and zone it was judged at', () => {
+    const portfolio = { anchorDate: ANCHOR, sourceFile: 'x.xlsx', positions: [{ fund: 'a', weight: 1 }] };
+    const funds = [{ id: 'a', name: 'A fund', shortName: 'A', isin: 'X', kind: 'equity' as const, assetClass: { es: 'x', en: 'x' }, sources: {} }];
+    const now = at('2026-11-06');
+    const lines = badgeLines(portfolio, funds, { kind: 'loaded', snapshot: { ...SNAPSHOT, state: 'failed', error: 'e' }, facts: FACTS }, now, TZ);
+    expect(lines[0]).toBe('Badge:    NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · STALE · run failed');
+    expect(lines[1]).toBe('          Source: Yahoo Finance (unofficial)');
+    expect(lines.at(-1)).toBe('          (judged at 2026-11-06T11:00:00.000Z in Europe/Madrid)');
   });
 });

@@ -395,8 +395,21 @@ for (const state of ['missing', 'unreadable'] as const) {
     // Performance and chart: a quiet placeholder, no number.
     const performance = page.getByRole('region', { name: 'Performance' });
     await expect(performance.locator('.placeholder')).toContainText(
-      state === 'missing' ? 'Prices are not wired yet' : 'The price snapshot could not be read',
+      state === 'missing' ? 'No price snapshot yet. Build one with npm run snapshots' : 'The price snapshot could not be read',
     );
+    if (state === 'missing') {
+      // The three sections and the footer say the same thing.
+      await expect(performance.locator('.placeholder')).toHaveText(
+        "No price snapshot yet. Build one with npm run snapshots; the portfolio's return over 1d · 5d · 1w · 1m · 2m will show here then.",
+      );
+      await expect(page.getByRole('region', { name: 'Portfolio value, last two months' }).locator('.placeholder')).toHaveText(
+        'No price snapshot yet. Build one with npm run snapshots, so there is no line to draw.',
+      );
+      await expect(page.getByRole('region', { name: 'Positions' }).locator('.section-note')).toHaveText(
+        'Tap a fund for its full name. Returns appear once a snapshot is built.',
+      );
+      await expect(page.locator('footer')).toContainText('Prices: no snapshot yet.');
+    }
     for (const name of ['Performance', 'Portfolio value, last two months']) {
       const region = page.getByRole('region', { name });
       await expect(region.locator('.placeholder')).toBeVisible();
@@ -565,16 +578,25 @@ test.describe('the freshness badge', () => {
     await expect(page.locator('.badge-detail')).toContainText("PARTIAL: 2026-10-26 is missing for some funds, so the portfolio's line and returns skip it.");
   });
 
-  test('shows the snapshot run’s own state and error when it failed', async ({ page }) => {
-    await open(
-      page,
-      (t) => mutate(t, (s) => Object.assign(s, { state: 'failed', error: 'every fund failed: us500: HTTP 429' })),
-      '2026-11-06T11:00:00Z',
-    );
-    await expect(page.locator('.badge')).toContainText('· STALE');
-    await page.locator('.badge').click();
-    await expect(page.locator('.badge-detail')).toContainText('The last snapshot run failed, so these are the previous prices: every fund failed: us500: HTTP 429');
-  });
+  // A failed rebuild writes back the previous file: its L can still be FRESH, so the badge says the run failed itself.
+  for (const run of ['failed', 'partial'] as const) {
+    test(`says the snapshot run was ${run} on the badge, in the warn colour, and its error in the detail`, async ({ page }, testInfo) => {
+      const error = run === 'failed' ? 'every fund failed: us500: HTTP 429' : '1 of 8 funds kept from the previous snapshot: japan: HTTP 429';
+      await open(page, (t) => WITHOUT_DROPPED(mutate(t, (s) => Object.assign(s, { state: run, error }))));
+      const badge = page.locator('.badge');
+      await expect(badge).toHaveText(`NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH · run ${run}`);
+      await expect(badge).toHaveAttribute('data-tone', 'warn');
+      const c = await colours(page);
+      expect(c.states).toBe(c.warn);
+      await badge.click();
+      await expect(page.locator('.badge-detail li').last()).toHaveText(
+        run === 'failed' ? `The last snapshot run failed, so these are the previous prices: ${error}` : `The snapshot run was ${run}: ${error}`,
+      );
+      if (process.env.EVIDENCE_DIR) {
+        await page.locator('header').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-badge-run-${run}.png`) });
+      }
+    });
+  }
 
   for (const snapshot of ['http500', 'unreadable'] as const) {
     test(`is ERROR on ${snapshot === 'http500' ? 'an HTTP 500' : 'JSON that does not parse'}, with the reason and an error line in each performance section`, async ({ page }, testInfo) => {

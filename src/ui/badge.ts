@@ -14,17 +14,27 @@ function keepWhole(text: string): (Node | string)[] {
   return text.split(WHOLE).map((part, i) => (i % 2 === 1 ? h('span', { class: 'nowrap' }, part) : part));
 }
 
-/** The badge's text in pieces that each stay on one line (`NAV as of …`, `snapshot …`, the states), separated by ` · `. */
+/**
+ * The badge's text in pieces that each stay on one line (`NAV as of …`, `snapshot …`, the states,
+ * the run). Each ` ·` stays with the piece before it, so a line may end on a separator but never
+ * starts with one; the text is the same.
+ */
 function pieces(freshness: Freshness): (Node | string)[] {
   const states = freshness.states.join(' · ');
-  const lead = states ? freshness.text.slice(0, freshness.text.length - states.length - ' · '.length) : freshness.text;
+  const run = freshness.run ? `run ${freshness.run}` : '';
+  const tail = [states, run].filter(Boolean).join(' · ');
+  const lead = tail ? freshness.text.slice(0, freshness.text.length - tail.length - ' · '.length) : freshness.text;
+  const parts: (Node | string)[] = lead.split(' · ');
+  // The dot rides with the first piece, so a line never starts or ends on it alone.
+  parts[0] = h('span', {}, h('span', { class: 'badge-dot', 'aria-hidden': 'true' }), parts[0]!);
+  if (states) parts.push(h('span', { class: 'badge-states' }, states));
+  if (run) parts.push(h('span', { class: 'badge-states badge-run' }, run));
   const out: (Node | string)[] = [];
-  lead.split(' · ').forEach((piece, i) => {
-    if (i > 0) out.push(' · ');
-    // The dot rides with the first piece, so a line never starts or ends on it alone.
-    out.push(h('span', { class: 'nowrap' }, i === 0 ? h('span', { class: 'badge-dot', 'aria-hidden': 'true' }) : null, piece));
+  parts.forEach((part, i) => {
+    const last = i === parts.length - 1;
+    out.push(h('span', { class: 'nowrap' }, part, last ? null : ' ·'));
+    if (!last) out.push(' ');
   });
-  if (states) out.push(' · ', h('span', { class: 'badge-states nowrap' }, states));
   return out;
 }
 
