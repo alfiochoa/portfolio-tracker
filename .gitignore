@@ -1,0 +1,2 @@
+# Agent team live state (board, task files, reports, evidence). Shared by absolute path, not by git.
+.team/
