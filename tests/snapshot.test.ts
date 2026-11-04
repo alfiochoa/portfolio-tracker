@@ -169,10 +169,23 @@ describe('parseSnapshot', () => {
   it('accepts an ISO time with milliseconds or an offset', () => {
     expect(parseSnapshot(withFields({ generatedAt: '2026-11-04T21:40:00.123Z' })).generatedAt).toBe('2026-11-04T21:40:00.123Z');
     expect(parseSnapshot(withFields({ generatedAt: '2026-11-04T22:40:00+01:00' })).generatedAt).toBe('2026-11-04T22:40:00+01:00');
+    expect(parseSnapshot(withFields({ generatedAt: '2028-02-29T00:00:00Z' })).generatedAt).toBe('2028-02-29T00:00:00Z'); // a leap year
   });
 
   it('refuses a generatedAt that is not an ISO time', () => {
-    for (const generatedAt of ['yesterday', '2026-11-04', '2026-13-45T25:00:00Z', 'Wed, 04 Nov 2026 21:40:00 GMT', '']) {
+    for (const generatedAt of [
+      'yesterday',
+      '2026-11-04',
+      '2026-13-45T25:00:00Z',
+      'Wed, 04 Nov 2026 21:40:00 GMT',
+      '',
+      // Dates the calendar does not have, which Date.parse would roll into the next month.
+      '2026-02-30T00:00:00Z',
+      '2026-04-31T00:00:00Z',
+      '2027-02-29T00:00:00Z',
+      '2026-00-10T00:00:00Z',
+      '2026-11-00T00:00:00Z',
+    ]) {
       expect(() => parseSnapshot(withFields({ generatedAt })), generatedAt).toThrow(
         `the snapshot's generatedAt is not an ISO time: ${JSON.stringify(generatedAt)}`,
       );
