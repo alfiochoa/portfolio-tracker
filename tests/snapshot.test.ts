@@ -154,6 +154,46 @@ describe('renderSnapshot', () => {
   });
 });
 
+describe('parseSnapshot', () => {
+  const good = snapshotOf(mergeRun(null, [ok('a', weekdays(61))], NOW));
+  /** The good snapshot's text with its top-level fields changed (`undefined` removes one). */
+  const withFields = (fields: Record<string, unknown>): string => JSON.stringify({ ...good, ...fields });
+  const committed = (...p: string[]): string => readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', ...p), 'utf8');
+
+  it('reads the committed snapshot and both e2e fixtures', () => {
+    for (const file of [['public', 'data', 'prices.json'], ['e2e', 'fixtures', 'prices.json'], ['e2e', 'fixtures', 'prices-lagging.json']]) {
+      expect(() => parseSnapshot(committed(...file)), file.join('/')).not.toThrow();
+    }
+  });
+
+  it('accepts an ISO time with milliseconds or an offset', () => {
+    expect(parseSnapshot(withFields({ generatedAt: '2026-11-04T21:40:00.123Z' })).generatedAt).toBe('2026-11-04T21:40:00.123Z');
+    expect(parseSnapshot(withFields({ generatedAt: '2026-11-04T22:40:00+01:00' })).generatedAt).toBe('2026-11-04T22:40:00+01:00');
+  });
+
+  it('refuses a generatedAt that is not an ISO time', () => {
+    for (const generatedAt of ['yesterday', '2026-11-04', '2026-13-45T25:00:00Z', 'Wed, 04 Nov 2026 21:40:00 GMT', '']) {
+      expect(() => parseSnapshot(withFields({ generatedAt })), generatedAt).toThrow(
+        `the snapshot's generatedAt is not an ISO time: ${JSON.stringify(generatedAt)}`,
+      );
+    }
+    expect(() => parseSnapshot(withFields({ generatedAt: 1762292400000 }))).toThrow('not a snapshot (no generatedAt or funds)');
+  });
+
+  it('refuses a state other than ok, partial or failed', () => {
+    expect(() => parseSnapshot(withFields({ state: 'weird' }))).toThrow(`the snapshot's state is not ok, partial or failed: "weird"`);
+    expect(() => parseSnapshot(withFields({ state: 'OK' }))).toThrow(`the snapshot's state is not ok, partial or failed: "OK"`);
+    expect(() => parseSnapshot(withFields({ state: undefined }))).toThrow(`the snapshot's state is not ok, partial or failed: null`);
+    for (const state of ['ok', 'partial', 'failed']) expect(parseSnapshot(withFields({ state })).state).toBe(state);
+  });
+
+  it('refuses a snapshot without a source or whose source has no name', () => {
+    for (const source of [undefined, null, 'Yahoo', { kind: 'yahoo' }, { name: 42, kind: 'yahoo' }]) {
+      expect(() => parseSnapshot(withFields({ source })), JSON.stringify(source)).toThrow('the snapshot does not name its source');
+    }
+  });
+});
+
 /** A line diff of two texts (longest common subsequence): removed lines as `- x`, added as `+ x`. */
 function diffLines(a: string, b: string): string[] {
   const la = a.split('\n');

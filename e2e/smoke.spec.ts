@@ -706,6 +706,46 @@ test.describe('the freshness badge', () => {
     ]);
     await expect(page.locator('footer')).toContainText('Prices: the snapshot of 2026-11-04 06:30 UTC from Yahoo Finance (unofficial) could not be used');
   });
+
+  for (const [what, change, reason] of [
+    ['a generatedAt that is not a time', { generatedAt: 'yesterday' }, 'ERROR: the snapshot\'s generatedAt is not an ISO time: "yesterday"'],
+    ['an unknown run state', { state: 'weird' }, 'ERROR: the snapshot\'s state is not ok, partial or failed: "weird"'],
+    ['a source without a name', { source: { kind: 'yahoo' } }, 'ERROR: the snapshot does not name its source'],
+  ] as const) {
+    test(`is ERROR on ${what}, with the reason in the detail`, async ({ page }) => {
+      await open(page, (t) => JSON.stringify({ ...JSON.parse(WITHOUT_DROPPED(t)), ...change }));
+      const badge = page.locator('.badge');
+      await expect(badge).toHaveText('Allocation as of 2026-11-04 · prices unreadable · ERROR');
+      await badge.click();
+      await expect(page.locator('.badge-detail li').first()).toHaveText(reason);
+      await expect(page.locator('.tile')).toHaveCount(0);
+    });
+  }
+
+  test('its detail closes with Escape, focus staying on the badge, and with a click outside it', async ({ page }) => {
+    await open(page, WITHOUT_DROPPED);
+    const badge = page.locator('.badge');
+    const detail = page.locator('.badge-detail');
+    await badge.click();
+    await expect(detail).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(detail).toBeHidden();
+    await expect(badge).toHaveAttribute('aria-expanded', 'false');
+    await expect(badge).toBeFocused();
+    // Open again from the keyboard; a click inside the detail keeps it, one on the heading closes it.
+    await page.keyboard.press('Enter');
+    await expect(detail).toBeVisible();
+    await detail.locator('li').first().click();
+    await expect(detail).toBeVisible();
+    await page.locator('h1').click();
+    await expect(detail).toBeHidden();
+    await expect(badge).toHaveAttribute('aria-expanded', 'false');
+    // The badge still toggles it.
+    await badge.click();
+    await expect(detail).toBeVisible();
+    await badge.click();
+    await expect(detail).toBeHidden();
+  });
 });
 
 test('the allocation shows before the snapshot answers, and the performance sections say prices are loading', async ({ page }, testInfo) => {
@@ -732,6 +772,63 @@ test('the allocation shows before the snapshot answers, and the performance sect
   release();
   await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
   await expect(page.locator('.tile')).toHaveCount(5);
+});
+
+test('a snapshot that does not answer in 15 s is ERROR, saying so', async ({ page }) => {
+  // install(), not setFixedTime(): the page's timers wait for runFor().
+  await page.clock.install({ time: new Date(WEDNESDAY) });
+  let held = false;
+  await page.route('**/data/prices.json', () => {
+    held = true; // never answered
+  });
+  await page.goto('/');
+  const badge = page.locator('.badge');
+  await expect(badge).toHaveText('Allocation as of 2026-11-04 · loading prices…');
+  await expect.poll(() => held).toBe(true);
+  await page.clock.runFor(14_000);
+  await expect(badge).toHaveText('Allocation as of 2026-11-04 · loading prices…');
+  await page.clock.runFor(2_000);
+  await expect(badge).toHaveText('Allocation as of 2026-11-04 · prices unreadable · ERROR');
+  await expect(badge).toHaveAttribute('data-tone', 'error');
+  await badge.click();
+  await expect(page.locator('.badge-detail li').first()).toHaveText('ERROR: the snapshot did not answer in 15 s');
+  for (const name of ['Performance', 'Portfolio value, last two months']) {
+    await expect(page.getByRole('region', { name }).locator('.placeholder')).toContainText('could not be read');
+  }
+  await expect(page.getByRole('region', { name: 'Positions' }).locator('.section-note')).toContainText('could not be read');
+  await expect(page.getByRole('region', { name: 'Allocation' }).getByText('Equities 90.34 %')).toBeVisible();
+});
+
+test('a tab shown again fetches the snapshot again and judges it against the clock as it is now', async ({ page }) => {
+  let requests = 0;
+  page.on('request', (r) => {
+    if (r.url().endsWith('/data/prices.json')) requests++;
+  });
+  await open(page, WITHOUT_DROPPED, '2026-11-05T11:00:00Z'); // Thursday noon in Madrid
+  const badge = page.locator('.badge');
+  await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+  expect(requests).toBe(1);
+
+  /** Stub document.visibilityState and fire visibilitychange, as the browser does when the tab is hidden or shown. */
+  const setVisibility = (state: 'hidden' | 'visible') =>
+    page.evaluate((state) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, state);
+
+  // Overnight: the tab is hidden, the clock moves to Friday noon. Hiding it, or focusing the window, fetches nothing.
+  await setVisibility('hidden');
+  await page.clock.setFixedTime(new Date('2026-11-06T11:00:00Z'));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.locator('h1').click();
+  expect(requests).toBe(1);
+  await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+
+  await setVisibility('visible');
+  await expect(badge).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · STALE');
+  await expect(badge).toHaveAttribute('data-tone', 'warn');
+  expect(requests).toBe(2);
+  await expect(page.locator('.tile[data-window="2m"] .tile-value')).toHaveText('+8.49 %');
 });
 
 // The freshness rule at its edges, on the fixture cut off at a date L (every fund ends there). "Two weekdays
@@ -816,5 +913,18 @@ test.describe('the badge on a touch screen and from the keyboard', () => {
     await badge.focus();
     await page.keyboard.press('Space');
     await expect(page.locator('.badge-detail')).toBeVisible();
+  });
+
+  test('a tap outside the detail closes it; a tap inside does not', async ({ page }) => {
+    await open(page, WITHOUT_DROPPED);
+    const badge = page.locator('.badge');
+    const detail = page.locator('.badge-detail');
+    await badge.tap();
+    await expect(detail).toBeVisible();
+    await detail.locator('li').first().tap();
+    await expect(detail).toBeVisible();
+    await page.locator('h1').tap();
+    await expect(detail).toBeHidden();
+    await expect(badge).toHaveAttribute('aria-expanded', 'false');
   });
 });
