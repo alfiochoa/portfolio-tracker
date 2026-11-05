@@ -37,3 +37,8 @@ The numbers are the product. Anything `docs/SPEC.md` calls exact (weights, the f
 ## Traps
 
 - `.team/` sits inside the main checkout: any tool that globs the whole tree (eslint, tsc, vitest, playwright) must ignore `.team`, or it lints the designer's mock-up scripts. `eslint.config.js` does; keep it so when adding a tool.
+
+## Traps the sources set
+
+- Vanguard's product pages can answer with different ten-day tables a minute apart around publication time, so a second `npm run snapshots` may drop or add a fund's newest NAV. That is the source, not the change under test: do not report it as non-idempotence; the carry-forward rule (SPEC "Data sources") keeps a NAV once published.
+- Yahoo answers 429 to a full browser User-Agent string from this machine and 200 to `Mozilla/5.0`, which the script sends. Not rate limiting.
