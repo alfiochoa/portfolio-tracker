@@ -48,6 +48,28 @@ The badge reads `NAV as of <date> · snapshot <time> · <state>`; tap or hover i
 
 To check any number on the page, `node scripts/recompute.ts` prints what the page should show, worked out from the two data files with the same code the page uses. The exact definitions are in [docs/SPEC.md, "Exact definitions"](docs/SPEC.md#exact-definitions).
 
+## Keeping it current
+
+Funds publish a day's price the next morning, so the snapshot should be rebuilt every working day. Nothing does that yet: it can happen in one of two places, and which one is your choice. Both are built and waiting.
+
+**A. On GitHub, like market-desk.** A scheduled job (a GitHub Actions *workflow*, `.github/workflows/refresh.yml`) runs on GitHub's computers every weekday at 08:15 UTC (09:15 in Madrid in winter, 10:15 in summer): it fetches the prices, saves the new `public/data/prices.json` in the repository when there is a new price, and publishes the page on GitHub Pages, GitHub's free hosting, at `https://<your-user>.github.io/portfolio-tracker/`. Your computer can be off. What it needs from you:
+
+1. On github.com, **New repository**, named `portfolio-tracker`. On a free account Pages works only for a **public** repository: anyone could then see the fund catalogue and the weights (no amounts; there are none in the repository). The page itself is public at that address either way.
+2. Say the word, and the code is pushed to it (that is the architect's step).
+3. In the repository, **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+4. **Actions → Refresh prices & deploy Pages → Run workflow** once, to publish the first time. After that it runs by itself; a run that fails sends you GitHub's usual e-mail and leaves the page as it was.
+
+**B. On this computer.** A *cron job* (Linux's built-in scheduler) runs `scripts/refresh.sh` every weekday at 09:15 Madrid time: it fetches the prices and rebuilds the page into `dist/`, and writes one line per step, with the time and the result, to `var/refresh.log`. Nothing leaves the computer and nothing is committed to git (the changed `public/data/prices.json` stays as a local change). The computer has to be on and awake at 09:15; a missed day is caught up by the next run. What it needs from you:
+
+1. In a terminal, run `crontab -e` (it opens your schedule in an editor).
+2. Add this line at the end, save and close:
+   ```
+   15 9 * * 1-5 cd /home/usuario/Repos/portfolio-tracker && scripts/refresh.sh
+   ```
+3. To look at the page, run `npm run preview` in the repository's folder and open the address it prints (http://localhost:5200). Opening `dist/index.html` by double-click does not work: browsers do not let a page read its own data files that way.
+
+Either way, the badge at the top shows it working: its `snapshot` time is when the prices were last fetched, and `STALE` means no new price has arrived for more than two weekdays.
+
 ## Data sources and their terms
 
 | Source | What is taken | Terms |

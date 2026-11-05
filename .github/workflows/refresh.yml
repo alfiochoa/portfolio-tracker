@@ -1,0 +1,67 @@
+name: Refresh prices & deploy Pages
+# Weekdays at 08:15 UTC (by then every fund has published the previous working day's NAV), and by hand.
+# Never on push: the run commits the snapshot to main, and a push trigger would start it again.
+on:
+  schedule: [{ cron: '15 8 * * 1-5' }]   # best-effort: GitHub may delay a scheduled run, or skip it under load
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: refresh, cancel-in-progress: false }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    outputs:
+      changed: '${{ steps.diff.outputs.changed }}'
+      latest: '${{ steps.diff.outputs.latest }}'
+      state: '${{ steps.diff.outputs.state }}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      # No key and no secrets file: both sources are keyless. A run that ends `failed` exits 1, so the job
+      # stops here and nothing is committed or deployed; `partial` exits 0 and the badge says so.
+      - name: Fetch the NAVs into public/data/prices.json
+        run: npm run snapshots
+      - name: Did the data change? (a run that only moves generatedAt is not a change)
+        id: diff
+        run: |
+          if git diff --quiet -I '^  "generatedAt": ' -- public/data/prices.json; then c=false; else c=true; fi
+          echo "changed=$c" >> "$GITHUB_OUTPUT"
+          node -e '
+            const s = JSON.parse(require("fs").readFileSync("public/data/prices.json", "utf8"));
+            const last = Object.values(s.funds).map((f) => f.bars.at(-1)?.[0] ?? "-");
+            console.log(`latest=${[...new Set(last)].sort().join(" / ")}\nstate=${s.state}`);
+          ' >> "$GITHUB_OUTPUT"
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with: { name: prices, path: public/data/prices.json, retention-days: 3 }
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: { pages: write, id-token: write }
+    environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4
+  commit:
+    # The new snapshot becomes the baseline the next run builds on (a filled date stays filled).
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: prices, path: public/data }
+      - name: Commit the snapshot as the Actions bot and push to main
+        env:
+          LATEST: '${{ needs.build.outputs.latest }}'
+          STATE: '${{ needs.build.outputs.state }}'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/prices.json
+          git diff --cached --quiet || { git commit -m "Prices: NAV as of $LATEST (snapshot $STATE)"; git pull --rebase; git push; }
