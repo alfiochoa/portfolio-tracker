@@ -53,11 +53,14 @@ export type Euros =
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The stored value is usable: a positive whole number of euros and an ISO date. */
+/** The largest total accepted, typed or stored: ten million euros. No portfolio this page is for comes near it, and the bound keeps the amounts readable in a phone's cells. */
+export const MAX_EUROS = 10_000_000;
+
+/** The stored value is usable: a whole number of euros from 1 to MAX_EUROS and an ISO date. */
 export function isStoredTotal(value: unknown): value is StoredTotal {
   if (typeof value !== 'object' || value === null) return false;
   const { euros, asOf } = value as Record<string, unknown>;
-  return typeof euros === 'number' && Number.isSafeInteger(euros) && euros > 0 && typeof asOf === 'string' && ISO_DATE.test(asOf) && !Number.isNaN(Date.parse(asOf));
+  return typeof euros === 'number' && Number.isSafeInteger(euros) && euros > 0 && euros <= MAX_EUROS && typeof asOf === 'string' && ISO_DATE.test(asOf) && !Number.isNaN(Date.parse(asOf));
 }
 
 /** The stored text to a total, or null when it is absent or does not parse to one. */
@@ -72,12 +75,12 @@ export function parseStoredTotal(text: string | null): StoredTotal | null {
   return isStoredTotal(value) ? { euros: value.euros, asOf: value.asOf } : null;
 }
 
-/** What a person typed, as whole euros, or null when it is not a positive whole number. */
+/** What a person typed, as whole euros, or null when it is not a whole number from 1 to MAX_EUROS. */
 export function parseEuros(typed: string): number | null {
   const text = typed.trim();
   if (!/^\d+$/.test(text)) return null;
   const n = Number(text);
-  return Number.isSafeInteger(n) && n > 0 ? n : null;
+  return Number.isSafeInteger(n) && n > 0 && n <= MAX_EUROS ? n : null;
 }
 
 /**

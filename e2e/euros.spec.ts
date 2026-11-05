@@ -247,7 +247,9 @@ test('a browser that refuses storage: no euros, the form says so, no error', asy
   await expect(line).toContainText('This browser is not keeping anything for this page');
   await page.locator('#euro-input').fill('25000');
   await page.getByRole('button', { name: 'Show amounts' }).click();
-  await expect(line.locator('.euro-error')).toContainText('This browser is not keeping anything for this page');
+  // The note already says it, so the error points at the note instead of saying it twice.
+  await expect(line.locator('.euro-error')).toHaveText('Not kept: see the note below.');
+  await expect(line.getByText('This browser is not keeping anything for this page')).toHaveCount(1);
   await expect(page.locator('.tile-eur')).toHaveCount(0);
   // The guard checks that nothing was thrown on the page.
 });

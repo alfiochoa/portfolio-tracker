@@ -1151,6 +1151,12 @@ code {
   color: var(--warn);
 }
 
+/* Inside a sentence, Plex Mono's no-break space is a full cell next to proportional text: `25 000  €`. */
+:root[data-view='desk'] .euro-worth .num,
+:root[data-view='desk'] .euro-warn .num {
+  font-family: var(--font);
+}
+
 /* After the sentence on a laptop; on their own row on a phone. */
 @media (min-width: 40.0625rem) {
   .euro-worth .euro-actions {

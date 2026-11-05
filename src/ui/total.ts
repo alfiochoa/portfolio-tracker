@@ -56,6 +56,8 @@ export function forgetStoredTotal(): void {
 
 const INVALID = 'Type a whole number of euros, like 25000.';
 const NOT_KEPT = 'This browser is not keeping anything for this page (a private window, or storage blocked), so the amount cannot be kept here.';
+/** The error when the note under the buttons already says NOT_KEPT: the sentence shows once. */
+const NOT_KEPT_SEE_NOTE = 'Not kept: see the note below.';
 
 /** The form's state, across re-renders. */
 const ui = {
@@ -131,7 +133,7 @@ function form({ stored, latest, rerender }: TotalLineInput): HTMLElement {
     ui.draft = input.value;
     const euros = input.validity.badInput ? null : parseEuros(input.value);
     if (euros === null) ui.error = INVALID;
-    else if (!writeStoredTotal({ euros, asOf: latest })) ui.error = NOT_KEPT;
+    else if (!writeStoredTotal({ euros, asOf: latest })) ui.error = stored.available ? NOT_KEPT : NOT_KEPT_SEE_NOTE;
     else {
       ui.open = false;
       ui.error = null;
