@@ -1,10 +1,11 @@
-// The header: the name, the freshness badge, and the note on how funds are priced.
+// The header: the name, the view control, the freshness badge, and the note on how funds are priced.
 // The badge is a button: its text says the state in words, its dot and border in the state's
 // colour (the --ok, --warn, --error tokens); hovering shows the detail as a tooltip, and a tap,
 // a click or Enter opens it under the badge. Escape, or a click or tap outside the badge and its
 // detail, closes it again.
 import type { Freshness } from '../lib/freshness.ts';
 import { h } from './dom.ts';
+import { renderViewSwitch } from './view.ts';
 
 const DETAIL_ID = 'badge-detail';
 
@@ -101,6 +102,7 @@ export function renderHeader(freshness: Freshness): HTMLElement {
     'header',
     { class: 'site-header' },
     h('h1', { class: 'site-title' }, 'Portfolio tracker'),
+    renderViewSwitch(),
     renderBadge(freshness),
     h('p', { class: 'header-note' }, 'Funds price once a day; the NAV of a day is published the next working day.'),
   );
