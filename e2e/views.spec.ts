@@ -245,3 +245,25 @@ async function spills(page: Page, only?: '.tile-value'): Promise<string[]> {
     return out;
   }, only);
 }
+
+for (const view of ['glance', 'desk'] as const) {
+  test(`${view}: with a short history the "not enough history" cells stay inside their row and the page does not overflow`, async ({ page }) => {
+    // Only the bars from 2026-10-27 on: 1m and 2m have no start (verifier, T-007).
+    await page.route('**/data/prices.json', (route) => {
+      const s = JSON.parse(FIXTURE) as { funds: Record<string, { bars: [string, number][] }> };
+      for (const f of Object.values(s.funds)) f.bars = f.bars.filter(([d]) => d >= '2026-10-27');
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(s) });
+    });
+    await open(page, view);
+    const cells = page.locator('tr[data-fund="us500"] .ret[data-window="2m"]');
+    await expect(cells).toContainText('not enough history');
+    // The text of the 2m cell stays within its row's box (no overlap into the next fund's block).
+    const [cell, row] = await Promise.all([
+      cells.evaluate((e) => e.getBoundingClientRect().bottom),
+      page.locator('tr[data-fund="us500"]').evaluate((e) => e.getBoundingClientRect().bottom),
+    ]);
+    expect(cell).toBeLessThanOrEqual(row + 0.5);
+    expect(await spills(page), 'values wider than their cell').toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  });
+}
