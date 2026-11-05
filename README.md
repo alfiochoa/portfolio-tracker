@@ -50,14 +50,9 @@ To check any number on the page, `node scripts/recompute.ts` prints what the pag
 
 ## Keeping it current
 
-Funds publish a day's price the next morning, so the snapshot should be rebuilt every working day. Nothing does that yet: it can happen in one of two places, and which one is your choice. Both are built and waiting.
+Funds publish a day's price the next morning, so the snapshot is rebuilt every working day. That happens on GitHub (A, live since 2026-11-05); a job on this computer (B) is built too and stays as the alternative.
 
-**A. On GitHub, like market-desk.** A scheduled job (a GitHub Actions *workflow*, `.github/workflows/refresh.yml`) runs on GitHub's computers every weekday at 08:15 UTC (09:15 in Madrid in winter, 10:15 in summer): it fetches the prices, saves the new `public/data/prices.json` in the repository when there is a new price, and publishes the page on GitHub Pages, GitHub's free hosting, at `https://<your-user>.github.io/portfolio-tracker/`. Your computer can be off. What it needs from you:
-
-1. On github.com, **New repository**, named `portfolio-tracker`. On a free account Pages works only for a **public** repository: anyone could then see the fund catalogue and the weights (no amounts; there are none in the repository). The page itself is public at that address either way.
-2. Say the word, and the code is pushed to it (that is the architect's step).
-3. In the repository, **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-4. **Actions → Refresh prices & deploy Pages → Run workflow** once, to publish the first time. After that it runs by itself; a run that fails sends you GitHub's usual e-mail and leaves the page as it was.
+**A. On GitHub, like market-desk (live).** The page is at **https://alfiochoa.github.io/portfolio-tracker/**, from the public repository [alfiochoa/portfolio-tracker](https://github.com/alfiochoa/portfolio-tracker) (the fund catalogue and the weights are visible there; no amounts, there are none in the repository). A scheduled job (a GitHub Actions *workflow*, `.github/workflows/refresh.yml`) runs on GitHub's computers every weekday at 08:15 UTC (09:15 in Madrid in winter, 10:15 in summer): it fetches the prices, saves the new `public/data/prices.json` in the repository when there is a new price, and publishes the page on GitHub Pages, GitHub's free hosting. It needs no key and no AI, and GitHub runs it free; your computer can be off. A run that fails sends you GitHub's usual e-mail and leaves the page as it was. To refresh by hand: **Actions → Refresh prices & deploy Pages → Run workflow**. The first run, on 2026-11-05, fetched all eight funds from both sources and committed the snapshot back as `github-actions[bot]`.
 
 **B. On this computer.** A *cron job* (Linux's built-in scheduler) runs `scripts/refresh.sh` every weekday at 09:15 Madrid time: it fetches the prices and rebuilds the page into `dist/`, and writes one line per step, with the time and the result, to `var/refresh.log`. Nothing leaves the computer and nothing is committed to git (the changed `public/data/prices.json` stays as a local change). The computer has to be on and awake at 09:15; a missed day is caught up by the next run. What it needs from you:
 
