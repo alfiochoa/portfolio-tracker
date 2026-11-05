@@ -118,7 +118,7 @@ describe('the y-range', () => {
 });
 
 describe('the layout', () => {
-  // The e2e fixture's 2m index, by hand (e2e/smoke.spec.ts): 100 on 2026-09-01, 108.49 on 2026-11-03.
+  // The e2e fixture's 2m index, by hand (e2e/chart.spec.ts): 100 on 2026-09-01, 108.49 on 2026-11-03.
   const points: IndexPoint[] = [
     ['2026-09-01', 100],
     ['2026-10-01', 108.49],
