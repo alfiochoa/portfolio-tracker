@@ -153,14 +153,26 @@ function chart(points: IndexPoint[]): HTMLElement[] {
   });
 
   // Draw at the frame's own width once it is on the page, and again whenever it changes.
+  // The draw waits for the next animation frame: redrawing inside the observer's callback changes the
+  // frame's box in the same frame, which the browser reports as "ResizeObserver loop completed with
+  // undelivered notifications" (Vite's dev overlay shows it). Several notifications before that frame
+  // make one draw, at the latest width.
   if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(([entry]) => {
-      const width = Math.floor(entry?.contentRect.width ?? 0);
+    let width = 0;
+    let pending = false;
+    const redraw = () => {
+      pending = false;
       const height = heightNow();
       if (width <= 0 || (width === layout.width && height === layout.height)) return;
       layout = layoutChart(points, width, height);
       marks = draw(svg, layout);
       show(active);
+    };
+    new ResizeObserver(([entry]) => {
+      width = Math.floor(entry?.contentRect.width ?? 0);
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(redraw);
     }).observe(frame);
   }
   return [readout, frame];

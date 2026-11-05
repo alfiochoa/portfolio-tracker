@@ -346,7 +346,7 @@ The worth in the line is `--text-figure`. Euro lines with words or a gap before 
 
 On a phone a fund's block grows: the weight takes a second line (`10 085 €`) and each cell a third (`−40 €`). In both views a phone cell's euro line has `-0.02em` tracking (`--eur-tracking`): T-013 found Glance's bold total row overran its cell's padding by 1 px at `+19 565 €` without it. The widest plausible change, `−17 500 €` (a 250 000 € portfolio, 7 % on the heaviest fund), fits a fifth of the card at the phone's `--text-small`; D-002 checked five-figure changes (`−14 821 €`, a 1 500 000 € total) at 360 px in Glance. Desk's monospace needs its phone euro lines at 10 px (its phone `--text-small`) for the same. T-013 screenshots 360 px with a total of 25 000 € and one of 1 500 000 € in both views. Desk at 1280 px: the euro lines make each table row two lines tall, which is the price of the amounts; nothing else moves.
 
-**Desk**: the link in `--accent`; the primary button a blue block, radius 4 px, label in Plex Mono uppercase 11 px; amounts in Plex Mono.
+**Desk**: the link in `--accent`; the primary button a blue block, radius 4 px, label in Plex Mono uppercase 11 px; amounts in Plex Mono, except the amounts inside the line's sentence (`.euro-worth .num`, `.euro-warn .num`), which take `--font` (Plex Sans, still tabular): Plex Mono's no-break space is a full cell next to proportional text and doubled the gap before `€` (`25 000  €`). The tiles' and the table's amounts stay in `--font-num`.
 
 ## Shared components
 
