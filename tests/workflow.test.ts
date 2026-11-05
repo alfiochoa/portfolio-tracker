@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
 const root = new URL('../', import.meta.url);
+const parseJson = (text: string) => JSON.parse(text) as { funds: Record<string, unknown> };
 
 type Step = { id?: string; name?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, string> };
 type Job = { needs?: string | string[]; if?: string; permissions?: Record<string, string>; steps: Step[]; outputs?: Record<string, string> };
@@ -110,9 +111,33 @@ describe('the refresh workflow (.github/workflows/refresh.yml)', () => {
       expect(run((j) => j.replace(/(\["\d{4}-\d{2}-\d{2}",[\d.]+\])\n(\s*\]\n\s*\})/, '$1,\n["2099-01-01",1.0]\n$2')).changed).toBe('true');
     });
 
-    // Seen live (T-012 verification): two real runs minutes apart, same bars, differ in every fund's
-    // fetchedAt, so the step says changed=true and the workflow would commit on every weekday.
-    it.todo('a run that only moves the fetchedAt stamps (same bars) is not a change');
+    // Seen live (T-012 verification): two real runs minutes apart, same bars, differed in every fund's
+    // fetchedAt, and the step said changed=true, so the workflow would have committed every weekday.
+    const restamp = (j: string) =>
+      j
+        .replace(/"generatedAt": "[^"]*"/, '"generatedAt": "2099-01-01T00:00:00Z"')
+        .replace(/("fetchedAt": ?)"[^"]*"/g, '$1"2099-01-01T00:00:00Z"');
+
+    it('a run that only moves the fetchedAt stamps (same bars) is not a change', () => {
+      const file = path.join(dir, 'public/data/prices.json');
+      const before = readFileSync(file, 'utf8');
+      const after = restamp(before);
+      // Every fund's fetchedAt line and every Vanguard entry's fetchedAt moved, and nothing else did.
+      const funds = Object.keys(parseJson(before).funds).length;
+      const moved = after.split('\n').filter((l, i) => l !== before.split('\n')[i]);
+      expect(moved.filter((l) => /^ {6}"fetchedAt": /.test(l))).toHaveLength(funds);
+      expect(moved.filter((l) => /^ {6}"vanguard": \{"fetchedAt":/.test(l))).toHaveLength(funds);
+      expect(moved).toHaveLength(2 * funds + 1);
+      expect(run(restamp).changed).toBe('false');
+    });
+
+    it('the same stamps moved and one bar added is a change', () => {
+      expect(run((j) => restamp(j).replace(/(\["\d{4}-\d{2}-\d{2}",[\d.]+\])\n(\s*\]\n\s*\})/, '$1,\n["2099-01-01",1.0]\n$2')).changed).toBe('true');
+    });
+
+    it('a Vanguard entry that becomes an error is a change (only the stamps are ignored)', () => {
+      expect(run((j) => j.replace(/"vanguard": \{"fetchedAt":[^}]*\}/, '"vanguard": {"error":"HTTP 500"}')).changed).toBe('true');
+    });
   });
 
   it('every step either runs a command or uses a pinned action', () => {

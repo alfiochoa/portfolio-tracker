@@ -23,10 +23,12 @@ jobs:
       # stops here and nothing is committed or deployed; `partial` exits 0 and the badge says so.
       - name: Fetch the NAVs into public/data/prices.json
         run: npm run snapshots
-      - name: Did the data change? (a run that only moves generatedAt is not a change)
+      - name: Did the data change? (a run that only moves the time stamps, generatedAt and fetchedAt, is not a change)
         id: diff
+        # -I ignores a hunk whose changed lines all match: the generatedAt line, each fund's fetchedAt
+        # line and its one-line vanguard entry (which holds a fetchedAt). The stamps follow the bars.
         run: |
-          if git diff --quiet -I '^  "generatedAt": ' -- public/data/prices.json; then c=false; else c=true; fi
+          if git diff --quiet -I '"generatedAt"' -I '"fetchedAt"' -- public/data/prices.json; then c=false; else c=true; fi
           echo "changed=$c" >> "$GITHUB_OUTPUT"
           node -e '
             const s = JSON.parse(require("fs").readFileSync("public/data/prices.json", "utf8"));
