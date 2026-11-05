@@ -48,6 +48,10 @@ The badge reads `NAV as of <date> · snapshot <time> · <state>`; tap or hover i
 
 To check any number on the page, `node scripts/recompute.ts` prints what the page should show, worked out from the two data files with the same code the page uses. The exact definitions are in [docs/SPEC.md, "Exact definitions"](docs/SPEC.md#exact-definitions).
 
+## Euro amounts
+
+Under the returns, **Show amounts in euros** asks once for what the portfolio is worth today (the figure your advisor's app shows, in whole euros). From then on every return also shows as money, each fund shows what it is worth, and the line says what the whole is worth on the latest price date. The amount stays in this browser only (its local storage): it is never sent anywhere, never saved in the repository or the snapshot, and another browser or a private window will not know it. It follows the prices day by day as if nothing had been added or withdrawn since you typed it, so after adding money, press **Change** and type the new total; **Forget** removes it. `node scripts/recompute.ts --total 25000` prints the same amounts.
+
 ## Keeping it current
 
 Funds publish a day's price the next morning, so the snapshot is rebuilt every working day. That happens on GitHub (A, live since 2026-11-05); a job on this computer (B) is built too and stays as the alternative.
@@ -76,7 +80,7 @@ Neither needs a key or an account. The browser never calls either: only `npm run
 
 ## Honest limitations
 
-- **Weights only, no amounts.** The export has no euros, units or cost, so every number is a percentage.
+- **Weights only, no amounts in the data.** The export has no euros, units or cost, so every number is a percentage unless you type the total in the page (see [Euro amounts](#euro-amounts)), and then the euros are that total split by the weights and carried by the prices.
 - **A buy-and-hold of the exported allocation**, valued backwards and forwards from the export's date, not the advisor's actual trades or rebalancing.
 - **"Today" is usually yesterday.** A fund publishes a day's NAV the next working day, so the newest price is normally the previous working day's.
 - **Freshness is a rule**, not a promise: `FRESH` means the newest NAV is at most two weekdays old; a bank holiday can make it look `STALE` for a day.

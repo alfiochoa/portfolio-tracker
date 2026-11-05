@@ -66,7 +66,7 @@ export function monthsBack(date: string, months: number): string {
 }
 
 /** The index of the last of `dates` (ascending) on or before `date`, or -1 when there is none. */
-function lastOnOrBefore(dates: readonly string[], date: string): number {
+export function lastOnOrBefore(dates: readonly string[], date: string): number {
   let found = -1;
   for (let i = 0; i < dates.length && dates[i]! <= date; i++) found = i;
   return found;

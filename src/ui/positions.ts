@@ -4,21 +4,23 @@
 // Glance tints each return cell by the size of its move; Desk shows the same markup as a dense
 // ruled table (docs/DESIGN.md "Positions").
 import { chartStart, fundIndex, sparkPath } from '../lib/chart.ts';
-import { formatPercent, NO_VALUE } from '../lib/format.ts';
+import type { Euros } from '../lib/euros.ts';
+import { formatEuros, formatPercent, NO_VALUE } from '../lib/format.ts';
 import type { Freshness } from '../lib/freshness.ts';
 import { totalWeight, type Position } from '../lib/portfolio.ts';
 import { WINDOWS, type Returns } from '../lib/returns.ts';
 import type { Bar } from '../lib/yahoo.ts';
 import { s } from './chart.ts';
 import { h, section } from './dom.ts';
-import { heat, NOT_ENOUGH, signedReturn } from './tiles.ts';
+import { euroChange, heat, NOT_ENOUGH, signedReturn } from './tiles.ts';
 
 /**
  * The five return cells of one row: `fund` names the fund, or is null for the total row (the
  * portfolio's returns). Without returns (no snapshot, or an unreadable one) each says there is no value.
  * The value sits in a chip (the tinted cell in Glance); on a phone the chip shows its window above it.
+ * With a total carried, the change in euros sits under the percentage in the same chip, so it takes its colour.
  */
-function returnCells(returns: Returns | null, fund: string | null): HTMLElement[] {
+function returnCells(returns: Returns | null, fund: string | null, euros: Euros | null): HTMLElement[] {
   return WINDOWS.map((window, i) => {
     const attrs = { role: 'cell', class: 'num ret', 'data-window': window };
     const chip = (text: string, more: Record<string, string> = {}) => h('span', { class: 'chip', 'data-window': window, ...more }, text);
@@ -28,11 +30,10 @@ function returnCells(returns: Returns | null, fund: string | null): HTMLElement[
     const value = fund === null ? w.portfolio : w.funds[fund];
     if (value === undefined) return h('td', attrs, chip(NO_VALUE, { 'data-sign': 'none' }));
     const { text, sign } = signedReturn(value);
-    return h(
-      'td',
-      { ...attrs, 'data-sign': sign, title: `${window} since ${w.start}` },
-      chip(text, { 'data-sign': sign, style: heat(window, value) }),
-    );
+    const amount = euroChange(euros, i, fund);
+    const box = chip(text, { 'data-sign': sign, style: heat(window, value) });
+    if (amount !== null) box.append(h('span', { class: 'chip-eur' }, amount));
+    return h('td', { ...attrs, 'data-sign': sign, title: `${window} since ${w.start}` }, box);
   });
 }
 
@@ -151,8 +152,18 @@ export function renderPositions(
   returns: Returns | null,
   funds: Readonly<Record<string, { bars: readonly Bar[] }>> | null = null,
   fundLatest: Readonly<Record<string, string | null>> | null = null,
+  euros: Euros | null = null,
 ): HTMLElement {
   const prices = freshness.state === 'loaded' ? returns : null;
+  const carried = prices && euros?.kind === 'carried' ? euros : null;
+  /** The weight, and under it the value in euros on L when a total is carried. */
+  const weightCell = (weight: number, value: number | undefined) =>
+    h(
+      'td',
+      { role: 'cell', class: 'num weight' },
+      formatPercent(weight),
+      carried && value !== undefined ? h('span', { class: 'eur-value' }, formatEuros(value, 'value')) : null,
+    );
   const behind = prices ? lagging(fundLatest) : {};
   const head = h(
     'tr',
@@ -169,8 +180,8 @@ export function renderPositions(
       { role: 'row', class: 'position', 'data-fund': p.fund.id, 'data-kind': p.fund.kind },
       h('td', { role: 'cell', class: 'class' }, p.fund.assetClass.en),
       fundCell(p, behind[p.fund.id]),
-      h('td', { role: 'cell', class: 'num weight' }, formatPercent(p.weight)),
-      ...returnCells(prices, p.fund.id),
+      weightCell(p.weight, carried?.funds[p.fund.id]),
+      ...returnCells(prices, p.fund.id, carried),
       sparkCell(p, prices, funds),
     ),
   );
@@ -181,8 +192,8 @@ export function renderPositions(
     { role: 'row', class: 'total' },
     h('td', { role: 'cell', class: 'class' }),
     h('th', { role: 'rowheader', scope: 'row', class: 'total-label' }, 'Total'),
-    h('td', { role: 'cell', class: 'num weight' }, formatPercent(totalWeight(positions))),
-    ...returnCells(prices, null),
+    weightCell(totalWeight(positions), carried?.worth),
+    ...returnCells(prices, null, carried),
     h('td', { role: 'cell', class: 'spark' }),
   );
   return section(

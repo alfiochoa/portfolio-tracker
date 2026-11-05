@@ -28,6 +28,25 @@ export function formatSignedPercent(fraction: number): string {
   return `${sign}${percentDigits(h)} %`;
 }
 
+/** A narrow no-break space between thousands, a no-break space before the euro sign (docs/DESIGN.md rule 3). */
+const THOUSANDS = ' ';
+const BEFORE_UNIT = ' ';
+
+/**
+ * Euros, whole, rounded half away from zero (SPEC "Euro amounts"). A `change` always shows its sign
+ * (`+1 234 €`, `−48 €`, and `0 €` when it rounds to zero); a `value` never does (`25 312 €`).
+ */
+export function formatEuros(euros: number, kind: 'value' | 'change'): string {
+  if (!Number.isFinite(euros)) throw new Error(`not a number: ${euros}`);
+  const abs = Math.abs(euros);
+  // The same nudge as for percentages: 2.5 computed as 2.4999999999999996 still rounds to 3.
+  const whole = Math.round(abs + abs * Number.EPSILON * 4);
+  const digits = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, THOUSANDS);
+  const negative = euros < 0 && whole > 0;
+  const sign = kind === 'change' ? (whole === 0 ? '' : negative ? MINUS : '+') : negative ? MINUS : '';
+  return `${sign}${digits}${BEFORE_UNIT}€`;
+}
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A date as `2026-11-03`. Takes an ISO date string (checked, returned as is) or a Date (its UTC day). */

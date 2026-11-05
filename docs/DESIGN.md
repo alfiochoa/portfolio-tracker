@@ -125,7 +125,7 @@ Vite rewrites `/fonts/…` in the CSS to a relative URL (`../fonts/…`), so the
 | `--label-case` | `none` | `uppercase` |
 | `--label-tracking` | `0` | `0.04em` |
 
-Every number (returns, weights, euros, dates, the badge's text in Desk, chart labels) is set in `--font-num`; labels (window names, column heads, section asides) in `--font-label` with `text-transform: var(--label-case)` and `letter-spacing: var(--label-tracking)`.
+Every number (returns, weights, euros, dates, the badge's text in Desk, chart labels) is set in `--font-num`; labels (window names, column heads, section asides) in `--font-label` with `text-transform: var(--label-case)` and `letter-spacing: var(--label-tracking)`. Figures that line up in columns are tabular; a date aligns with nothing, so the badge, a tile's date (and the hero's "since") and the lagging chip use `font-variant-numeric: proportional-nums`: on a 1× screen Manrope's tabular "1" made "2026-11-04" read "2026-1 1-04". The page name takes `--word-spacing-small`, so "Portfolio tracker" reads as two words.
 
 ### Scale
 
@@ -314,7 +314,7 @@ On the page background, not in a card. `--text-note` `--muted`, paragraphs 6 px 
 
 ### Euro total (M2)
 
-Built by T-013 after T-007; none of it exists on `main` yet. The amounts follow SPEC "Exact definitions", "Euro amounts": whole euros, `+1 234 €` / `−48 €` / `0 €` for changes, `25 312 €` for values. The chart, the sparklines and the allocation stay in percentages.
+Built by T-013 (`src/ui/total.ts`, the arithmetic in `src/lib/euros.ts`). The amounts follow SPEC "Exact definitions", "Euro amounts": whole euros, `+1 234 €` / `−48 €` / `0 €` for changes, `25 312 €` for values. The chart, the sparklines and the allocation stay in percentages.
 
 **The line** sits at the bottom of the performance card, under the note, after a `--line` hairline and `--space-3` of air. It has three states.
 
@@ -326,20 +326,25 @@ Built by T-013 after T-007; none of it exists on `main` yet. The amounts follow 
    - Under them, `--text-small` `--muted`: "Stays in this browser. It is never sent anywhere or saved with the project."
    - An entry that is not a whole positive number: the group's border `--error`, and directly under the group, before the buttons, in `--error` `--text-small`: "Type a whole number of euros, like 25000." (`aria-describedby`, `aria-invalid`). Nothing is stored. (Buttons beside the field would push the error away from it on a phone, which is why the form is a stack.)
 3. **A total stored**: one paragraph, `--text-note`, `--muted`, with the worth in `--fg` `--weight-bold` `--font-num`: "Worth **25 312 €** on 2026-11-10, from the 25 000 € you entered for 2026-11-03; assumes nothing added or withdrawn since." Then "Change" (reopens the form, prefilled) and "Forget" (clears it at once; the line returns to state 1), both link style, 44 px, side by side after the text on a laptop and on their own row on a phone. At 360 px the sentence takes four lines; that is expected, nothing truncates.
-   - **Cannot be carried** (the entered date is not in the series any more): the same line in `--warn` on `--warn-bg`, radius `--radius`, padding `8px 12px`: "The 25 000 € you entered for 2026-07-01 is older than these prices, so no amounts are shown. Type today's total to see them again." with "Change" and "Forget". No amount appears anywhere on the page.
+   - **Cannot be carried** (the entered date is not in the series any more): the same line in `--warn` on `--warn-bg`, radius `--radius`, padding `8px 12px`: "The 25 000 € you entered for 2026-07-01 is older than these prices, so no amounts are shown. Type today's total to see them again." with "Change" and "Forget". A date inside the history that the series dropped (one fund did not price it) reads "… is not one of the dates these prices have, so …" instead. No amount appears anywhere on the page.
+4. **The browser keeps nothing** (storage blocked, or a private window that refuses it): the link and the form as in 1 and 2, but the note under the buttons reads "This browser is not keeping anything for this page (a private window, or storage blocked), so the amount cannot be kept here." and pressing "Show amounts" shows that sentence as the error. No amounts.
+
+The line shows only when the returns do: while loading, without a snapshot or with an unreadable one it is absent, and a stored total is left as it is. A return to the tab (the page re-fetches and redraws) keeps the open form, what is typed in it and the field's focus.
 
 **Amounts on the page** (only in state 3), always under the figure they belong to, in `--font-num`, tabular, never wrapping:
 
 | Where | What | Style |
 |---|---|---|
 | Glance hero | the 1-day change | under the big number, `--text-figure` (20 px) 700 in its sign colour; the "since" date under it |
-| Glance cell, Desk tile | the window's change | between the value and the date, `--text-small` 600 in its sign colour (Desk: 12 px Plex Mono) |
+| Glance cell, Desk tile | the window's change | between the value and the date, `--text-small` 600 in its sign colour (Desk: `--text-figure`, 12 px Plex Mono) |
 | Fund row, weight cell | the fund's value on L | under the weight, `--text-small` `--muted`, no sign |
 | Fund row, return cell | the fund's change over the window | under the percentage in the same cell (and chip), `--text-small` 600 in its sign colour; the tint stays the percentage's |
 | Total row | the portfolio's value under 100.00 %, each window's change under its return | as the fund rows, bold |
 | A window without enough history | no amount | the cell stays "not enough history" |
 
-On a phone a fund's block grows: the weight takes a second line (`10 085 €`) and each cell a third (`−40 €`). The widest plausible change, `−17 500 €` (a 250 000 € portfolio, 7 % on the heaviest fund), fits a fifth of the card at the phone's `--text-small`; D-002 checked five-figure changes (`−14 821 €`, a 1 500 000 € total) at 360 px in Glance. Desk's monospace needs its phone euro lines at 10 px with `-0.02em` tracking for the same. T-013 screenshots 360 px with a total of 25 000 € and one of 1 500 000 € in both views. Desk at 1280 px: the euro lines make each table row two lines tall, which is the price of the amounts; nothing else moves.
+The worth in the line is `--text-figure`. Euro lines with words or a gap before `€` take `--word-spacing-small` (Manrope's no-break space nearly vanishes at 11.5 px: `−158€`), except in a phone cell, where the room goes to the figures (`--eur-word-spacing: 0`).
+
+On a phone a fund's block grows: the weight takes a second line (`10 085 €`) and each cell a third (`−40 €`). In both views a phone cell's euro line has `-0.02em` tracking (`--eur-tracking`): T-013 found Glance's bold total row overran its cell's padding by 1 px at `+19 565 €` without it. The widest plausible change, `−17 500 €` (a 250 000 € portfolio, 7 % on the heaviest fund), fits a fifth of the card at the phone's `--text-small`; D-002 checked five-figure changes (`−14 821 €`, a 1 500 000 € total) at 360 px in Glance. Desk's monospace needs its phone euro lines at 10 px (its phone `--text-small`) for the same. T-013 screenshots 360 px with a total of 25 000 € and one of 1 500 000 € in both views. Desk at 1280 px: the euro lines make each table row two lines tall, which is the price of the amounts; nothing else moves.
 
 **Desk**: the link in `--accent`; the primary button a blue block, radius 4 px, label in Plex Mono uppercase 11 px; amounts in Plex Mono.
 
