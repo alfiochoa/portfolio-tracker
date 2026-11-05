@@ -1,63 +1,31 @@
 // The view control (docs/DESIGN.md "Views"): Glance by default, Desk one press away, remembered in
 // localStorage['portfolio-tracker.view'] and applied before the first paint; and what each view does
-// differently (the performance tiles, the positions, the fonts), at each size and theme.
+// differently (the performance tiles, the positions, the fonts), at each size and theme, on e2e/fixtures/prices.json.
+// That every value fits its tile or chip and nothing overflows is checked here, in each view.
 // Set EVIDENCE_DIR to also save one full-page screenshot per view per project.
-import { expect, test, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { expect, SHORT_HISTORY, open as openSnapshot, probe, spills, test, type Snapshot } from './helpers';
+import type { Page } from '@playwright/test';
 
-const FIXTURE = readFileSync(path.join(import.meta.dirname, 'fixtures', 'prices.json'), 'utf8');
 const KEY = 'portfolio-tracker.view';
 
-let outside: string[] = [];
-let errors: string[] = [];
 let fonts: string[] = [];
 
-test.use({ timezoneId: 'Europe/Madrid' });
-
-test.beforeEach(async ({ page, baseURL }) => {
-  outside = [];
-  errors = [];
+test.beforeEach(({ page }) => {
   fonts = [];
-  await page.route('**/*', (route) => {
-    const url = route.request().url();
-    if (url.startsWith(baseURL!)) return route.continue();
-    outside.push(url);
-    return route.abort();
-  });
-  await page.route('**/data/prices.json', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: FIXTURE }));
   page.on('request', (r) => {
     if (r.url().endsWith('.woff2')) fonts.push(path.basename(new URL(r.url()).pathname));
   });
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.clock.setFixedTime(new Date('2026-11-04T11:00:00Z'));
-});
-
-test.afterEach(() => {
-  expect(outside, 'requests outside the site').toEqual([]);
-  expect(errors, 'errors thrown on the page').toEqual([]);
 });
 
 /** Open the page with `view` stored (or nothing stored), and wait for the snapshot's render. */
-async function open(page: Page, view?: string): Promise<void> {
+async function open(page: Page, view?: string, snapshot: Snapshot = 'fixture'): Promise<void> {
   if (view !== undefined) await page.addInitScript(([k, v]) => localStorage.setItem(k!, v!), [KEY, view]);
-  await page.goto('/');
-  await expect(page.locator('.badge')).not.toHaveAttribute('data-state', 'loading');
+  await openSnapshot(page, snapshot);
 }
 
 const viewAttr = (page: Page) => page.evaluate(() => document.documentElement.getAttribute('data-view'));
 const stored = (page: Page) => page.evaluate((k) => localStorage.getItem(k), KEY);
-
-/** The computed colour of a CSS colour expression, on the page as it is. */
-const probe = (page: Page, value: string) =>
-  page.evaluate((v) => {
-    const el = document.createElement('span');
-    el.style.color = v;
-    document.body.append(el);
-    const c = getComputedStyle(el).color;
-    el.remove();
-    return c;
-  }, value);
 
 test('Glance is the default; the control switches to Desk and back, and the choice is remembered', async ({ page }, testInfo) => {
   await open(page);
@@ -222,39 +190,10 @@ test('at 360 px every tile value fits its tile in both views with the fallback f
   }
 });
 
-/** Each tile's value inside its tile's padding, each return inside its chip (the text's own box, measured with a Range). */
-async function spills(page: Page, only?: '.tile-value'): Promise<string[]> {
-  return page.evaluate((only) => {
-    const out: string[] = [];
-    const pairs: [Element, Element][] = [
-      ...[...document.querySelectorAll('.tile-value')].map((v) => [v, v.closest('.tile')!] as [Element, Element]),
-      ...(only ? [] : [...document.querySelectorAll('.positions .chip')].map((c) => [c, c] as [Element, Element])),
-    ];
-    for (const [value, box] of pairs) {
-      const range = document.createRange();
-      range.selectNodeContents(value);
-      const text = range.getBoundingClientRect();
-      const r = box.getBoundingClientRect();
-      const cs = getComputedStyle(box);
-      const left = r.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth);
-      const right = r.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
-      if (text.left < left - 0.5 || text.right > right + 0.5) {
-        out.push(`${box.closest('tr')?.getAttribute('data-fund') ?? 'tile'} ${box.closest('[data-window]')?.getAttribute('data-window') ?? ''}: ${value.textContent} (${Math.round(text.right - right)} px past)`);
-      }
-    }
-    return out;
-  }, only);
-}
-
 for (const view of ['glance', 'desk'] as const) {
   test(`${view}: with a short history the "not enough history" cells stay inside their row and the page does not overflow`, async ({ page }) => {
     // Only the bars from 2026-10-27 on: 1m and 2m have no start (verifier, T-007).
-    await page.route('**/data/prices.json', (route) => {
-      const s = JSON.parse(FIXTURE) as { funds: Record<string, { bars: [string, number][] }> };
-      for (const f of Object.values(s.funds)) f.bars = f.bars.filter(([d]) => d >= '2026-10-27');
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(s) });
-    });
-    await open(page, view);
+    await open(page, view, SHORT_HISTORY);
     const cells = page.locator('tr[data-fund="us500"] .ret[data-window="2m"]');
     await expect(cells).toContainText('not enough history');
     // The text of the 2m cell stays within its row's box (no overlap into the next fund's block).
