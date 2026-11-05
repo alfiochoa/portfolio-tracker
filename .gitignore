@@ -10,3 +10,5 @@ dist
 playwright-report
 test-results
 scripts/__pycache__/
+# The daily refresh's log (scripts/refresh.sh), on this machine only
+var/

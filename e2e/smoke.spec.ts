@@ -21,7 +21,7 @@ type Snapshot = 'fixture' | 'missing' | 'unreadable' | 'http500' | ((text: strin
 test.use({ timezoneId: 'Europe/Madrid' });
 const WEDNESDAY = '2026-11-04T11:00:00Z';
 
-async function open(page: Page, snapshot: Snapshot = 'fixture', now: string = WEDNESDAY): Promise<void> {
+async function open(page: Page, snapshot: Snapshot = 'fixture', now: string = WEDNESDAY, at = '/'): Promise<void> {
   await page.clock.setFixedTime(new Date(now));
   await page.route('**/data/prices.json', (route) => {
     if (snapshot === 'missing') return route.fulfill({ status: 404, body: 'Not Found' });
@@ -30,7 +30,7 @@ async function open(page: Page, snapshot: Snapshot = 'fixture', now: string = WE
     const body = typeof snapshot === 'function' ? snapshot(FIXTURE) : FIXTURE;
     return route.fulfill({ status: 200, contentType: 'application/json', body });
   });
-  await page.goto('/');
+  await page.goto(at);
   await expect(page.locator('#app > *').first()).toBeVisible();
   // The page renders at once and again when the snapshot has answered: wait for the second.
   await expect(page.locator('.badge')).not.toHaveAttribute('data-state', 'loading');
@@ -1004,4 +1004,22 @@ test.describe('the badge on a touch screen and from the keyboard', () => {
     await expect(detail).toBeHidden();
     await expect(badge).toHaveAttribute('aria-expanded', 'false');
   });
+});
+
+// GitHub Pages serves the site at https://<user>.github.io/portfolio-tracker/ (README, "Keeping it current"):
+// the build refers to its files relatively (vite base './'), so it works under that sub-path too.
+test('the built page refers to its files relatively, and works under a sub-path', async ({ page }) => {
+  const dist = path.join(import.meta.dirname, '..', 'dist');
+  expect(readFileSync(path.join(dist, 'index.html'), 'utf8')).not.toMatch(/["'(]\/(assets|data)\//);
+  await page.route('**/portfolio-tracker/**', (route) => {
+    const file = new URL(route.request().url()).pathname.replace(/^\/portfolio-tracker\//, '') || 'index.html';
+    if (file === 'data/prices.json') return route.fallback();
+    return route.fulfill({ path: path.join(dist, file) });
+  });
+  const requested: string[] = [];
+  page.on('request', (r) => requested.push(new URL(r.url()).pathname));
+  await open(page, WITHOUT_DROPPED, WEDNESDAY, '/portfolio-tracker/');
+  await expect(page.locator('.badge')).toHaveText('NAV as of 2026-11-03 · snapshot 2026-11-04 06:30 UTC · FRESH');
+  expect(requested).toContain('/portfolio-tracker/data/prices.json');
+  expect(requested.filter((p) => !p.startsWith('/portfolio-tracker/')), 'requests outside the sub-path').toEqual([]);
 });
