@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { computeEuros, isStoredTotal, parseEuros, parseStoredTotal, type Euros } from '../src/lib/euros.ts';
+import { computeEuros, isStoredTotal, MAX_EUROS, parseEuros, parseStoredTotal, type Euros } from '../src/lib/euros.ts';
 import type { Portfolio } from '../src/lib/portfolio.ts';
 import { computeReturns } from '../src/lib/returns.ts';
 import { parseSnapshot } from '../src/lib/snapshot.ts';
@@ -158,11 +158,15 @@ describe('the stored value and what is typed', () => {
       expect(parseStoredTotal(bad), String(bad)).toBeNull();
     }
     expect(isStoredTotal({ euros: 1, asOf: '2026-11-03' })).toBe(true);
+    expect(isStoredTotal({ euros: 1_000_000_000, asOf: '2026-11-03' })).toBe(true);
+    expect(parseStoredTotal('{"euros":1000000001,"asOf":"2026-11-03"}')).toBeNull();
+    expect(parseStoredTotal('{"euros":9007199254740991,"asOf":"2026-11-03"}')).toBeNull();
   });
 
-  it('takes a positive whole number of euros, and nothing else', () => {
+  it('takes a whole number of euros from 1 to a billion, and nothing else', () => {
     expect(parseEuros('25000')).toBe(25000);
     expect(parseEuros(' 1 ')).toBe(1);
-    for (const bad of ['', '0', '-5', '25.5', '25,000', '25.000,50', '1e3', 'abc', '99999999999999999999']) expect(parseEuros(bad), bad).toBeNull();
+    expect(parseEuros('1000000000')).toBe(MAX_EUROS);
+    for (const bad of ['', '0', '-5', '25.5', '25,000', '25.000,50', '1e3', 'abc', '1000000001', '9007199254740991', '99999999999999999999']) expect(parseEuros(bad), bad).toBeNull();
   });
 });
