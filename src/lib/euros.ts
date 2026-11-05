@@ -53,8 +53,8 @@ export type Euros =
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The largest total accepted, typed or stored: a billion euros. No portfolio this page is for comes near it, and a larger one overflows a phone's cells. */
-export const MAX_EUROS = 1_000_000_000;
+/** The largest total accepted, typed or stored: ten million euros. No portfolio this page is for comes near it, and the bound keeps the amounts readable in a phone's cells. */
+export const MAX_EUROS = 10_000_000;
 
 /** The stored value is usable: a whole number of euros from 1 to MAX_EUROS and an ISO date. */
 export function isStoredTotal(value: unknown): value is StoredTotal {
