@@ -186,11 +186,11 @@ describe('mergeRun with Vanguard', () => {
     });
   });
 
-  it('Yahoo ok, Vanguard failed: state ok, Yahoo’s bars alone, and a warning naming the fund', () => {
+  it('Yahoo ok, Vanguard failed: state ok, Yahoo’s bars, and a warning naming the fund', () => {
     const s = snapshotOf(mergeRun(null, [withV(ok('a', yahooBars()), vanguardBars()), withV(ok('b', yahooBars()), 'HTTP 404 (404 | Vanguard UK Professional)')], NOW));
     expect(s.state).toBe('ok');
     expect(s.error).toBeUndefined();
-    expect(s.warning).toBe("Vanguard failed for 1 of 2 funds, so Yahoo's bars alone are used for them: b: HTTP 404 (404 | Vanguard UK Professional)");
+    expect(s.warning).toBe("Vanguard failed for 1 of 2 funds; their newest days come from Yahoo and the previous file: b: HTTP 404 (404 | Vanguard UK Professional)");
     expect(s.funds.b).toEqual({ currency: 'EUR', fetchedAt: '2026-11-04T21:40:00Z', vanguard: { error: 'HTTP 404 (404 | Vanguard UK Professional)' }, bars: yahooBars() });
   });
 
@@ -258,6 +258,83 @@ describe('mergeRun with Vanguard', () => {
     ]);
   });
 
+  describe('a NAV Vanguard published past Yahoo’s last bar, then omitted', () => {
+    // Run one: Yahoo ends 2026-11-03, Vanguard's ten are 2026-10-22 … 2026-11-04 (the same values as
+    // Yahoo's on the dates both have, 116.5 on 2026-11-04). Run two: Vanguard's page is the older
+    // view, 2026-10-21 … 2026-11-03, as seen around publication time.
+    const ahead = (nov4 = 116.5): Bar[] => [...vanguardBars().slice(1), ['2026-11-04', nov4]];
+    const ranAhead = () => snapshotOf(mergeRun(null, [withV(ok('a', yahooBars()), ahead()), withV(ok('b', yahooBars()), ahead())], NOW));
+    const latest = (s: Snapshot, id = 'a') => s.funds[id]!.bars.at(-1)!;
+
+    it('(a) the page omits 2026-11-04: it is kept with its value, the latest stays 2026-11-04, the file changes only in generatedAt', () => {
+      const one = ranAhead();
+      expect(latest(one)).toEqual(['2026-11-04', 116.5]);
+      expect(one.funds.a!.vanguard).toEqual({ fetchedAt: '2026-11-04T21:40:00Z', from: '2026-10-22', to: '2026-11-04', bars: 10 });
+      const two = snapshotOf(mergeRun(parseSnapshot(renderSnapshot(one)), [withV(ok('a', yahooBars()), vanguardBars()), withV(ok('b', yahooBars()), vanguardBars())], LATER));
+      expect(latest(two)).toEqual(['2026-11-04', 116.5]);
+      expect(two.state).toBe('ok');
+      // The entry still says 2026-10-22 … 2026-11-04 were Vanguard's, fetched in run one: they are, in the file.
+      expect(two.funds.a).toEqual(one.funds.a);
+      expect(diffLines(renderSnapshot(one), renderSnapshot(two))).toEqual([
+        '-   "generatedAt": "2026-11-04T21:40:00Z",',
+        '+   "generatedAt": "2026-11-04T21:45:00Z",',
+      ]);
+    });
+
+    it('(b) the page lists 2026-11-04 with another value: Vanguard’s new value wins over the carried one', () => {
+      const s = snapshotOf(mergeRun(ranAhead(), [withV(ok('a', yahooBars()), ahead(116.75)), withV(ok('b', yahooBars()), ahead())], LATER));
+      expect(latest(s)).toEqual(['2026-11-04', 116.75]);
+      expect(s.funds.a!.vanguard).toEqual({ fetchedAt: '2026-11-04T21:45:00Z', from: '2026-10-22', to: '2026-11-04', bars: 10 });
+      expect(s.funds.a!.fetchedAt).toBe('2026-11-04T21:45:00Z');
+      expect(latest(s, 'b')).toEqual(['2026-11-04', 116.5]);
+    });
+
+    it('(c) Yahoo gets 2026-11-04: its value replaces the carried one, unless Vanguard still lists the date', () => {
+      const yahoo: Bar[] = [...yahooBars(), ['2026-11-04', 116.6]];
+      const s = snapshotOf(mergeRun(ranAhead(), [withV(ok('a', yahoo), vanguardBars()), withV(ok('b', yahoo), ahead())], LATER));
+      // a: Vanguard omits 2026-11-04, Yahoo has it: Yahoo's value, and the entry is this run's ten.
+      expect(latest(s)).toEqual(['2026-11-04', 116.6]);
+      expect(s.funds.a!.vanguard).toEqual({ fetchedAt: '2026-11-04T21:45:00Z', from: '2026-10-21', to: '2026-11-03', bars: 10 });
+      // b: Vanguard still lists 2026-11-04: Vanguard's value over Yahoo's; nothing new, so the times stay.
+      expect(latest(s, 'b')).toEqual(['2026-11-04', 116.5]);
+      expect(s.funds.b).toEqual(ranAhead().funds.b);
+    });
+
+    it('(d) a date before Yahoo’s first bar is not carried: the six-month window slides', () => {
+      const one = ranAhead();
+      const yahoo = yahooBars().slice(1); // Yahoo's window moved on by a day
+      const s = snapshotOf(mergeRun(one, [withV(ok('a', yahoo), vanguardBars()), withV(ok('b', yahoo), vanguardBars())], LATER));
+      expect(s.funds.a!.bars[0]).toEqual(yahoo[0]);
+      expect(s.funds.a!.bars.some(([d]) => d === one.funds.a!.bars[0]![0])).toBe(false);
+      expect(s.funds.a!.bars).toEqual(one.funds.a!.bars.slice(1));
+      expect(latest(s)).toEqual(['2026-11-04', 116.5]);
+    });
+
+    it('(e) a second run on the omitting answers changes only generatedAt', () => {
+      const answers = [withV(ok('a', yahooBars()), vanguardBars()), withV(ok('b', yahooBars()), vanguardBars())];
+      const two = snapshotOf(mergeRun(ranAhead(), answers, LATER));
+      const three = snapshotOf(mergeRun(parseSnapshot(renderSnapshot(two)), answers, new Date('2026-11-04T21:50:00Z')));
+      expect(diffLines(renderSnapshot(two), renderSnapshot(three))).toEqual([
+        '-   "generatedAt": "2026-11-04T21:45:00Z",',
+        '+   "generatedAt": "2026-11-04T21:50:00Z",',
+      ]);
+    });
+
+    it('Vanguard failed for the fund: 2026-11-04 is still carried, and the warning says where its newest days come from', () => {
+      const s = snapshotOf(mergeRun(ranAhead(), [withV(ok('a', yahooBars()), vanguardBars()), withV(ok('b', yahooBars()), 'HTTP 500')], LATER));
+      expect(latest(s, 'b')).toEqual(['2026-11-04', 116.5]);
+      expect(s.funds.b!.bars).toEqual(ranAhead().funds.b!.bars);
+      expect(s.warning).toBe('Vanguard failed for 1 of 2 funds; their newest days come from Yahoo and the previous file: b: HTTP 500');
+    });
+
+    it('the gap guard applies to the carried bars with Vanguard’s laid over: a gap after the carried 2026-11-04 is refused and said', () => {
+      const late = weekdays(10, '2026-11-27'); // 2026-11-16 … 2026-11-27: twelve days after 2026-11-04
+      const s = snapshotOf(mergeRun(ranAhead(), [withV(ok('a', yahooBars()), late), withV(ok('b', yahooBars()), vanguardBars())], LATER));
+      expect(s.funds.a!.vanguard).toEqual({ error: 'not laid over: a gap of 12 days between 2026-11-04 and 2026-11-16 (at most 7)' });
+      expect(s.funds.a!.bars).toEqual(ranAhead().funds.a!.bars);
+    });
+  });
+
   it('Vanguard bars that would leave a gap in the kept history are not laid over, and say why', () => {
     const previous = snapshotOf(mergeRun(null, [ok('a', weekdays(66, '2026-10-01'))], NOW));
     const s = snapshotOf(mergeRun(previous, [withV(fail('a'), vanguardBars())], LATER));
@@ -267,10 +344,10 @@ describe('mergeRun with Vanguard', () => {
 });
 
 describe('overlayBars, carryForward and differences', () => {
-  it('carryForward: the previous bar on a date inside the fresh span that the fresh bars lack, nothing outside it', () => {
+  it('carryForward: the previous bar on each date after the fresh first that the fresh bars lack, inside their span or after it', () => {
     const fresh: Bar[] = [['2026-10-22', 2], ['2026-10-23', 3], ['2026-10-27', 5]];
-    const previous: Bar[] = [['2026-10-21', 1], ['2026-10-23', 30], ['2026-10-26', 4], ['2026-10-28', 6]];
-    expect(carryForward(fresh, previous)).toEqual([['2026-10-22', 2], ['2026-10-23', 3], ['2026-10-26', 4], ['2026-10-27', 5]]);
+    const previous: Bar[] = [['2026-10-21', 1], ['2026-10-22', 20], ['2026-10-23', 30], ['2026-10-26', 4], ['2026-10-28', 6], ['2026-10-29', 7]];
+    expect(carryForward(fresh, previous)).toEqual([['2026-10-22', 2], ['2026-10-23', 3], ['2026-10-26', 4], ['2026-10-27', 5], ['2026-10-28', 6], ['2026-10-29', 7]]);
     expect(carryForward(fresh, [])).toEqual(fresh);
     expect(carryForward([], previous)).toEqual([]);
   });
@@ -529,7 +606,7 @@ describe('run, with fetch stubbed', () => {
     expect(lines[1]).toBe('us500     vanguard      FAILED: the page is for IE00BFPM9L96, not IE00BFPM9V94');
     expect(lines[3]).toBe('europe    vanguard      FAILED: HTTP 404 (404 | Vanguard UK Professional)');
     expect(s.warning).toBe(
-      "Vanguard failed for 2 of 3 funds, so Yahoo's bars alone are used for them: us500: the page is for IE00BFPM9L96, not IE00BFPM9V94; " +
+      "Vanguard failed for 2 of 3 funds; their newest days come from Yahoo and the previous file: us500: the page is for IE00BFPM9L96, not IE00BFPM9V94; " +
         'europe: HTTP 404 (404 | Vanguard UK Professional)',
     );
     expect(requests.filter((r) => r.url.includes('/9177/'))).toHaveLength(1); // a 404 is not retried
@@ -691,6 +768,21 @@ describe('npm run snapshots, as a process', () => {
     expect(changed.every((l) => /"generatedAt"/.test(l))).toBe(true);
   });
 
+  it('Vanguard’s page loses its newest day between two runs: the file keeps it and differs only in generatedAt', () => {
+    expect(snapshots('healthy', 'ahead').status).toBe(0); // Vanguard has 2026-11-04, Yahoo ends 2026-11-03
+    const one = text();
+    const before = parseSnapshot(one);
+    for (const f of Object.values(before.funds)) expect(f.bars.at(-1)![0]).toBe('2026-11-04');
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100); // timestamps have one-second resolution
+    const r = snapshots('healthy', 'healthy'); // the page's older view: 2026-10-21 … 2026-11-03
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('us500     vanguard        10 bars  2026-10-21 … 2026-11-03\n');
+    expect(r.stdout.trim().split('\n').at(-1)).toBe(`Wrote public/data/prices.json: state ok, ${catalogue.length} funds, latest NAV 2026-11-04.`);
+    const changed = diffLines(one, text());
+    expect(changed).toHaveLength(2);
+    expect(changed.every((l) => /"generatedAt"/.test(l))).toBe(true);
+  });
+
   it('one symbol unknown: exit 0, state partial, that fund keeps its bars and says why', () => {
     snapshots('healthy');
     const before = parseSnapshot(text());
@@ -711,7 +803,7 @@ describe('npm run snapshots, as a process', () => {
     expect(r.stdout).toContain('europe    vanguard      FAILED: HTTP 404 (404 | Vanguard UK Professional)\n');
     const s = parseSnapshot(text());
     expect(s.state).toBe('ok');
-    expect(s.warning).toBe("Vanguard failed for 1 of 8 funds, so Yahoo's bars alone are used for them: europe: HTTP 404 (404 | Vanguard UK Professional)");
+    expect(s.warning).toBe("Vanguard failed for 1 of 8 funds; their newest days come from Yahoo and the previous file: europe: HTTP 404 (404 | Vanguard UK Professional)");
     expect(r.stdout.trim().split('\n').at(-1)).toBe(`Wrote public/data/prices.json: state ok, 8 funds, latest NAV 2026-11-03; ${s.warning}.`);
     expect(s.funds.europe!.vanguard).toEqual({ error: 'HTTP 404 (404 | Vanguard UK Professional)' });
     // Yahoo's bars, and 2026-10-26 (which Yahoo lacks) carried from the previous file: the hole stays filled.

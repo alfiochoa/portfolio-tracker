@@ -6,6 +6,8 @@
 //   STUB_YAHOO=bad:<symbol>     that symbol gets Yahoo's 404 body, the others are healthy
 //   STUB_VANGUARD=healthy       every product page lists the ten weekdays 2026-10-21 .. 2026-11-03,
 //                               2026-10-26 included, at the same values as Yahoo's
+//   STUB_VANGUARD=ahead         every product page lists the ten weekdays 2026-10-22 .. 2026-11-04,
+//                               a day past Yahoo's last bar (as seen around publication time)
 //   STUB_VANGUARD=down          every Vanguard request fails like a closed port
 //   STUB_VANGUARD=bad:<id>      that page id gets Vanguard's real 404 page, the others are healthy
 // The catalogue is read from data/funds.json in the working directory (the scratch repo).
@@ -20,11 +22,11 @@ const notFound = readFileSync(new URL('./vanguard/not-found.html', import.meta.u
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn, _ms, ...args) => realSetTimeout(fn, 0, ...args);
 
-/** Every weekday from 2026-05-04 to 2026-11-03 as [date, nav]; the NAV depends on the symbol and the day. */
-function weekdays(symbol) {
+/** Every weekday from 2026-05-04 to `last` as [date, nav]; the NAV depends on the symbol and the day. */
+function weekdays(symbol, last = '2026-11-03') {
   const base = 100 + symbol.charCodeAt(9);
   const out = [];
-  for (let d = Date.parse('2026-05-04T00:00:00Z'), i = 0; d <= Date.parse('2026-11-03T00:00:00Z'); d += 86_400_000) {
+  for (let d = Date.parse('2026-05-04T00:00:00Z'), i = 0; d <= Date.parse(`${last}T00:00:00Z`); d += 86_400_000) {
     const day = new Date(d).getUTCDay();
     if (day === 0 || day === 6) continue;
     out.push([new Date(d).toISOString().slice(0, 10), Math.round((base + i++ * 0.37) * 1e4) / 1e4]);
@@ -52,7 +54,7 @@ function vanguard(id, isin) {
   if (vanguardMode === 'down') throw refused();
   if (vanguardMode === `bad:${id}`) return new Response(notFound, { status: 404, headers: { 'content-type': 'text/html' } });
   const fund = catalogue.find((f) => f.isin === isin);
-  return new Response(vanguardPage(isin, weekdays(fund.sources.yahoo).slice(-10)), { status: 200, headers: { 'content-type': 'text/html' } });
+  return new Response(vanguardPage(isin, weekdays(fund.sources.yahoo, vanguardMode === 'ahead' ? '2026-11-04' : '2026-11-03').slice(-10)), { status: 200, headers: { 'content-type': 'text/html' } });
 }
 
 globalThis.fetch = async (input) => {

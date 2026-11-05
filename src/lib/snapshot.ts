@@ -83,16 +83,17 @@ export function overlayBars(base: readonly Bar[], over: readonly Bar[]): Bar[] {
 }
 
 /**
- * `fresh` with `previous`'s bar added on each date between `fresh`'s first and last that `fresh`
- * lacks: a date Vanguard once filled (2026-10-26, which Yahoo never had) stays when it leaves
- * Vanguard's ten. `fresh` wins wherever it has a value; dates outside its span are not carried.
+ * `fresh` with `previous`'s bar added on each date after `fresh`'s first that `fresh` lacks, inside
+ * its span or after its last date: a date Vanguard once filled (2026-10-26, which Yahoo never had)
+ * stays when it leaves Vanguard's ten, and a NAV Vanguard published once (2026-11-04, past Yahoo's
+ * last bar) stays when its page omits it again, so a fund's latest date never steps back. `fresh`
+ * wins wherever it has a value; dates on or before its first are not carried (the window slides).
  */
 export function carryForward(fresh: readonly Bar[], previous: readonly Bar[]): Bar[] {
   if (fresh.length === 0) return [...fresh];
   const first = fresh[0]![0];
-  const last = fresh.at(-1)![0];
   const have = new Set(fresh.map(([d]) => d));
-  const carried = previous.filter(([d]) => d > first && d < last && !have.has(d));
+  const carried = previous.filter(([d]) => d > first && !have.has(d));
   return carried.length ? overlayBars(carried, fresh) : [...fresh];
 }
 
@@ -123,12 +124,15 @@ const sameValues = (all: readonly Bar[], some: readonly Bar[]): boolean => {
  * Merge one run's results (one per fund, in catalogue order) with the previous snapshot.
  *
  * Per fund, the base is Yahoo's bars from this run, with the previous file's value carried on each
- * date inside their span that they lack (carryForward: a hole once filled stays filled), or, when
- * Yahoo failed, the previous file's bars (`kept: true`, `error`); Vanguard's bars are laid over it
- * (overlayBars: Vanguard wins over both on its dates) and recorded in
- * `vanguard`, or Vanguard's failure is. An entry whose bars, currency and Vanguard bars are what
+ * date after their first that they lack, inside their span or after it (carryForward: a hole once
+ * filled stays filled, a latest date never steps back), or, when Yahoo failed, the previous file's
+ * bars (`kept: true`, `error`); Vanguard's bars are laid over it (overlayBars: Vanguard wins over
+ * both on its dates) and recorded in `vanguard`, or Vanguard's failure is. An entry whose bars, currency and Vanguard bars are what
  * the previous file has keeps its times, so a second run on the same answers changes only
- * `generatedAt`.
+ * `generatedAt`. A Vanguard answer that steps back (its last date before the previous entry's `to`,
+ * every value already in the previous bars) brings nothing new: the previous entry is kept, since
+ * its dates are still Vanguard's values in the file, so a page that briefly omits its newest day
+ * changes only `generatedAt`.
  *
  * - Every fund's Yahoo bars refreshed: `state: "ok"`, with a `warning` naming the funds Vanguard failed for.
  * - Some fund's Yahoo bars kept from the previous file: `state: "partial"` and `error`, whatever Vanguard did.
@@ -173,8 +177,15 @@ export function mergeRun(previous: Snapshot | null, results: readonly FundResult
         validateBars(merged);
         bars = merged;
         const was = before?.vanguard;
-        const same = was && 'fetchedAt' in was && was.from === v[0]![0] && was.to === v.at(-1)![0] && was.bars === v.length && sameValues(before.bars, v);
-        vanguard = { fetchedAt: same ? was.fetchedAt : generatedAt, from: v[0]![0], to: v.at(-1)![0], bars: v.length };
+        const known = was && 'fetchedAt' in was && sameValues(before.bars, v) ? was : undefined;
+        const from = v[0]![0];
+        const to = v.at(-1)![0];
+        if (known && to < known.to && sameValues(bars, before!.bars.filter(([d]) => d >= known.from && d <= known.to))) {
+          vanguard = known; // an older view of the page: the newer ten it gave before are still in the bars
+        } else {
+          const same = known && known.from === from && known.to === to && known.bars === v.length;
+          vanguard = { fetchedAt: same ? known.fetchedAt : generatedAt, from, to, bars: v.length };
+        }
       } catch (e) {
         vanguard = { error: `not laid over: ${(e as Error).message}` };
       }
@@ -197,7 +208,7 @@ export function mergeRun(previous: Snapshot | null, results: readonly FundResult
   const snapshot: Snapshot = { generatedAt, source: { ...SOURCE }, state: failures.length ? 'partial' : 'ok', funds };
   if (failures.length) snapshot.error = `${failures.length} of ${results.length} funds kept from the previous snapshot: ${reasons}`;
   else if (vanguardFailures.length) {
-    snapshot.warning = `Vanguard failed for ${vanguardFailures.length} of ${results.length} funds, so Yahoo's bars alone are used for them: ${vanguardFailures.join('; ')}`;
+    snapshot.warning = `Vanguard failed for ${vanguardFailures.length} of ${results.length} funds; their newest days come from Yahoo and the previous file: ${vanguardFailures.join('; ')}`;
   }
   return { write: true, snapshot };
 }
