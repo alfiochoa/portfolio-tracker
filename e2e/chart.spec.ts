@@ -143,6 +143,20 @@ test('redraws at a new width and keeps the readout on the same date', async ({ p
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
 });
 
+test('resizing never reports "ResizeObserver loop" (the dev overlay shows it) and the chart ends at the new width', async ({ page }) => {
+  // The pageerror guard does not see this one: it is an ErrorEvent without an error, so listen on window.
+  await page.addInitScript(() => window.addEventListener('error', (e) => ((window as unknown as { __loops: string[] }).__loops ??= []).push(e.message)));
+  await open(page);
+  const svg = page.locator('svg.chart');
+  const start = Number(await svg.getAttribute('width'));
+  for (const width of [360, 1280, 500, 360, 1280]) await page.setViewportSize({ width, height: 800 });
+  await expect.poll(async () => Number(await svg.getAttribute('width'))).toBeGreaterThan(600);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await expect.poll(async () => Number(await svg.getAttribute('width'))).toBeLessThan(400);
+  expect(start).toBeGreaterThan(0);
+  expect(await page.evaluate(() => (window as unknown as { __loops?: string[] }).__loops ?? [])).toEqual([]);
+});
+
 test('a finger drags along the line, and a vertical swipe on it still scrolls the page', async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith('phone'), 'touch only');
   await open(page);
