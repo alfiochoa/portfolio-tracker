@@ -2,6 +2,10 @@
 
 Newest first. One entry per decision: what was chosen, over what, and why. Keep entries short.
 
+## 2026-11-05: the design system's own choices in applying Glance with a Desk tab (designer, D-002)
+
+Where D-001's two mock-ups disagreed or were silent, `docs/DESIGN.md` chose: **one page grid for both views** from 64rem (performance full width, chart 8 + allocation 4, positions full width), Desk's mock-up layout, because five Desk tiles do not fit beside the chart and a second grid would be a third layout difference; Glance's 1-day hero sits beside its four cells there instead. **Tints per return cell** in Glance, as the mock-up Alfredo chose, not one tint per fund card by its 1d move (SPEC "The screen" says the latter; the architect may want to align that line). **The allocation keeps one structure** in both views: a two-segment equities/bonds bar and the class list with tracks, not Glance's eight alternating-shade segments, whose repeated shades could not be told apart. **Desk keeps its green/red** returns as designed: the views are two looks, and Desk's is market-desk's; the sign is always shown. **The same texts in both views** (long window labels, section titles), so no view-specific copy. **Manrope's file is patched** to map U+202F to its space, because the subset lacks the euro amounts' thousands space and the fallback glyph was invisible; the alternative, changing the formatter, would touch `src/lib` and the oracle.
+
 ## 2026-11-05: the look is Glance, with a Desk tab (Alfredo; the architect read "tab" as a view switch)
 
 Alfredo chose Glance from D-001's three options (the designer's and the architect's recommendation) and asked for "a tab for Desk". Read as a control in the header that switches the same page and data between the two looks, Glance by default, remembered by the browser; not a second page and not a theme. Desk is bounded to its own tokens and type plus the dense performance row and positions table, so T-007 builds one page with two token sets. He did not answer the 5d/1w question, so both windows stay. SPEC "The screen", "Views"; `docs/DESIGN.md` (D-002) carries the details.
