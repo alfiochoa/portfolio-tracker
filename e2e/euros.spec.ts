@@ -306,12 +306,33 @@ for (const value of [
   });
 }
 
-test('an amount too large to keep exactly is refused with the message, and nothing is stored', async ({ page }) => {
+for (const typed of ['99999999999999999999', '9007199254740991', '1000000000', '10000001']) {
+  test(`an amount above ten million (${typed}) is refused with the message, and nothing is stored`, async ({ page }) => {
+    await open(page);
+    const line = page.locator('.euro');
+    await line.getByRole('button', { name: 'Show amounts in euros' }).click();
+    await page.getByLabel("Your portfolio's total value today, in whole euros").fill(typed);
+    await line.getByRole('button', { name: 'Show amounts' }).click();
+    await expect(line).toContainText('Type a whole number of euros, like 25000.');
+    expect(await stored(page)).toBeNull();
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+  });
+}
+
+test('ten million euros is the largest total kept, and the page does not scroll sideways with it', async ({ page }) => {
   await open(page);
   const line = page.locator('.euro');
   await line.getByRole('button', { name: 'Show amounts in euros' }).click();
-  await page.getByLabel("Your portfolio's total value today, in whole euros").fill('99999999999999999999');
+  await page.getByLabel("Your portfolio's total value today, in whole euros").fill('10000000');
   await line.getByRole('button', { name: 'Show amounts' }).click();
-  await expect(line).toContainText('Type a whole number of euros, like 25000.');
+  await expect(line).toHaveAttribute('data-state', 'stored');
+  expect(JSON.parse((await stored(page))!).euros).toBe(10_000_000);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
+test('a stored total above ten million is treated as absent and removed', async ({ page }) => {
+  await page.addInitScript(([k, v]) => localStorage.setItem(k!, v!), [KEY, '{"euros":10000001,"asOf":"2026-11-03"}']);
+  await open(page);
+  await expect(page.locator('.euro')).toHaveAttribute('data-state', 'none');
   expect(await stored(page)).toBeNull();
 });
