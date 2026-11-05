@@ -45,6 +45,8 @@ One page, sections top to bottom. It works at phone width (360 px) and on a lapt
 5. **Allocation**: a bar of equities against bonds with the percentages, and the breakdown by asset class.
 6. **Footer**: source and licence notes, "not investment advice", the anchor date of the allocation and how to update it.
 
+**The euro total (M2, optional).** Under the tiles, one line. With nothing stored it is a single link, "Show amounts in euros", which opens a one-field form (whole euros) and a note that the amount stays in this browser and is never sent anywhere. With a total stored, the line says what the portfolio is worth on `L` and from what ("Worth 25 312 € on 2026-11-10, from the 25 000 € you entered for 2026-11-03; assumes nothing added or withdrawn since"), with "Change" and "Forget". Then each tile carries the window's change in euros under the percentage, each fund row its value on `L` beside its weight and the change in euros under each return, and the total row the same for the whole. The chart, the sparklines and the allocation stay in percentages.
+
 States the page can be in: no snapshot yet (M0: positions and allocation show, performance sections say prices are not wired yet); snapshot loaded (normal); snapshot stale or partial (badge says so, numbers still shown); snapshot unreadable (badge `ERROR`, performance sections show an explicit error, positions and allocation still show).
 
 Copy is in English (sibling of market-desk); the asset classes keep their Spanish names in the data and in the fund's full-name tooltip.
@@ -87,6 +89,12 @@ When the series does not reach far enough for a window, that tile says "not enou
 | `ERROR` | the snapshot cannot be loaded or parsed, or a fund has no bars at all |
 
 `PARTIAL` combines with `FRESH`/`STALE` (`FRESH · PARTIAL`). The badge also shows the snapshot's own `state` (`ok`, `partial`, `failed`) when it is not `ok`, with the reason the script recorded.
+
+**Euro amounts (M2, optional).** The total Alfredo types, `E₀`, is taken as the portfolio's value on the latest date at that moment, `D`, and the pair is kept in the browser only (`localStorage`). On any later `L` the portfolio is worth
+
+    E = E₀ · V(L) / V(D)
+
+so the typed amount follows the prices as a holding with nothing added or withdrawn since `D` would (that assumption is written beside it; after adding money he types the new total). A fund's value on `L` is its share after the drift since the anchor, `E_i = E · w_i · P_i(L) / P_i(T) / V(L)`, so the eight sum to `E`. The change over a window is what the holding gained or lost between `S` and `L` given what it is worth on `L`: `E − E · V(S)/V(L)` for the portfolio (equivalently `E · r / (1 + r)` with `r` the window's return) and `E_i − E_i · P_i(S)/P_i(L)` for fund `i`; the eight fund changes sum to the portfolio's, and a change has the sign of its return. When `D` is not in the portfolio series (older than the history, or a dropped date), no amounts are shown and the control asks for the total again; a window without enough history has no amount. Amounts are rounded to whole euros at display time, half away from zero, with the sign always shown on a change (`+1 234 €`, `−48 €`, `0 €`) and never on a value (`25 312 €`), thousands grouped with a narrow no-break space. `scripts/recompute.ts --total <euros> [--total-as-of <date>]` prints them from the same functions.
 
 ## Data sources
 
