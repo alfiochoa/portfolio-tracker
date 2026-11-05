@@ -4,6 +4,7 @@
 import './styles.css';
 import funds from '../data/funds.json';
 import portfolio from '../data/portfolio.json';
+import { computeEuros, type Euros } from './lib/euros.ts';
 import { assessFreshness, seriesFacts, type Freshness, type PricesOutcome } from './lib/freshness.ts';
 import { allocationOf, positionsOf, type Fund, type Portfolio } from './lib/portfolio.ts';
 import { readPrices, type Returns } from './lib/returns.ts';
@@ -14,6 +15,7 @@ import { renderChart } from './ui/chart.ts';
 import { renderFooter } from './ui/footer.ts';
 import { renderPositions } from './ui/positions.ts';
 import { renderTiles } from './ui/tiles.ts';
+import { afterRender, beforeRender, readStoredTotal, renderTotalLine } from './ui/total.ts';
 import { h } from './ui/dom.ts';
 
 /** Relative to the page, so the site also works under a sub-path. */
@@ -77,21 +79,46 @@ async function loadPrices(): Promise<Loaded> {
   }
 }
 
-function render({ prices, returns, funds }: Loaded): void {
+/** What the page shows now: drawn again, without a fetch, when the euro total is saved, changed or forgotten. */
+let current: Loaded = { prices: { kind: 'loading' }, returns: null, funds: null };
+
+/**
+ * The amounts for the total kept in this browser, read at each render; null without one. The
+ * euro line shows only with the returns: in any other state the stored total is left as it is.
+ */
+function euroTotal(returns: Returns | null, funds: Snapshot['funds'] | null): { line: HTMLElement | null; euros: Euros | null } {
+  if (!returns || !funds) return { line: null, euros: null };
+  const stored = readStoredTotal();
+  let euros: Euros | null = null;
+  try {
+    euros = stored.total ? computeEuros(allocation, funds, returns, stored.total) : null;
+  } catch (e) {
+    console.error(`euro amounts not computed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const line = renderTotalLine({ stored, euros, latest: returns.latest, rerender: () => render(current) });
+  return { line, euros };
+}
+
+function render(loaded: Loaded): void {
+  current = loaded;
+  const { prices, returns, funds } = loaded;
   const freshness: Freshness = assessFreshness({ anchorDate: allocation.anchorDate, prices, now: now(), names });
   const shown = freshness.state === 'loaded' ? returns : null;
+  const { line, euros } = euroTotal(shown, shown ? funds : null);
+  beforeRender();
   app!.replaceChildren(
     renderHeader(freshness),
     h(
       'main',
       { class: 'sections' },
-      renderTiles(freshness, shown),
+      renderTiles(freshness, shown, euros, line),
       renderChart(freshness, shown),
-      renderPositions(positions, freshness, shown, shown ? funds : null, shown ? fundLatestOf(prices) : null),
+      renderPositions(positions, freshness, shown, shown ? funds : null, shown ? fundLatestOf(prices) : null, euros),
       renderAllocation(allocationOf(positions), allocation.anchorDate),
     ),
     renderFooter(allocation, freshness),
   );
+  afterRender();
 }
 
 /** Each load is numbered; only the latest one's answer is rendered, so a slow earlier answer never overwrites a newer one. */
@@ -103,7 +130,7 @@ function load(): void {
   });
 }
 
-render({ prices: { kind: 'loading' }, returns: null, funds: null });
+render(current);
 load();
 
 // A tab left open overnight: when it is shown again, fetch the snapshot again (it may have been

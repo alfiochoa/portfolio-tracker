@@ -193,6 +193,14 @@
   --class-pad: 0;
   --class-row-gap: 3px;
   --perf-placeholder: 12rem;
+  --field-w: 11rem; /* the euro form's input group */
+  --field-pad: 0 12px;
+  --button-pad: 0 18px;
+  --link-pad: 0 8px;
+  --warn-pad: 8px 12px;
+  --link-underline-offset: 3px;
+  --eur-tracking: 0; /* a euro line under a return */
+  --eur-word-spacing: var(--word-spacing-small); /* before its €; none in a phone cell, where five figures need the room */
 }
 
 /* ---------- Glance dark ---------- */
@@ -441,6 +449,8 @@
     --chip-pad: 5px 3px;
     --chip-margin: 0;
     --chart-bleed: 8px;
+    --eur-word-spacing: 0;
+    --eur-tracking: -0.02em; /* five figures in the total row's bold fit a fifth of the card */
   }
   :root[data-view='desk'] {
     --radius-card: 6px;
@@ -450,6 +460,7 @@
     --text-tile: 1rem;
     --text-cell: 0.71875rem;
     --text-small: 0.625rem;
+    --eur-tracking: -0.02em; /* five-figure changes fit a fifth of the phone card in Plex Mono */
     --tile-pad: 6px 8px;
     --chip-pad: 1px 2px;
     --chip-margin: 0;
@@ -571,6 +582,7 @@ code {
   font-size: var(--text-title);
   font-weight: var(--weight-title);
   letter-spacing: var(--title-tracking);
+  word-spacing: var(--word-spacing-small);
 }
 
 .view-switch {
@@ -637,7 +649,7 @@ code {
   color: var(--muted);
   font-family: var(--font);
   font-size: var(--text-note);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: proportional-nums; /* dates and a time, aligned with nothing */
   text-align: left;
   cursor: pointer;
 }
@@ -860,15 +872,18 @@ code {
 }
 
 /* A return's colour is its sign: up, down, or --muted for 0.00 %. */
-[data-sign='up'] > .tile-value {
+[data-sign='up'] > .tile-value,
+[data-sign='up'] > .tile-eur {
   color: var(--up);
 }
 
-[data-sign='down'] > .tile-value {
+[data-sign='down'] > .tile-value,
+[data-sign='down'] > .tile-eur {
   color: var(--down);
 }
 
 [data-sign='flat'] > .tile-value,
+[data-sign='flat'] > .tile-eur,
 .tile-missing {
   color: var(--muted);
 }
@@ -879,9 +894,17 @@ code {
   letter-spacing: 0;
 }
 
+/* The window's change in euros, between the value and the date, in the value's sign colour. */
+.tile-eur {
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
+  word-spacing: var(--word-spacing-small);
+}
+
 .tile-start {
   color: var(--muted-on-tint);
   font-size: var(--text-small);
+  font-variant-numeric: proportional-nums; /* a date aligns with nothing; Manrope's tabular 1 reads "2026-1 1-04" */
   word-spacing: var(--word-spacing-small);
 }
 
@@ -911,6 +934,11 @@ code {
 .tile-hero .tile-missing {
   font-size: var(--text-cell);
   letter-spacing: 0;
+}
+
+.tile-hero .tile-eur {
+  font-size: var(--text-figure);
+  font-weight: var(--weight-bold);
 }
 
 .tile-hero .tile-start {
@@ -980,6 +1008,12 @@ code {
   font-size: var(--text-cell);
 }
 
+:root[data-view='desk'] .tile-eur,
+:root[data-view='desk'] .tile-hero .tile-eur {
+  font-size: var(--text-figure);
+  font-weight: var(--weight-bold);
+}
+
 :root[data-view='desk'] .tile-hero .tile-start {
   font-size: var(--text-small);
 }
@@ -1002,6 +1036,169 @@ code {
     content: '';
     background: var(--surface);
   }
+}
+
+/* ---------- Euro total (M2): the line under the tiles, and its form ---------- */
+
+.euro {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: var(--border) solid var(--line);
+  font-size: var(--text-note);
+}
+
+.euro-form {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.euro-label {
+  color: var(--fg);
+  font-weight: var(--weight-strong);
+}
+
+.euro-field {
+  display: inline-flex;
+  align-items: center;
+  width: var(--field-w);
+  max-width: 100%;
+  min-height: var(--hit);
+  padding: var(--field-pad);
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.euro-field:focus-within {
+  outline: var(--focus-ring) solid var(--focus);
+  outline-offset: var(--focus-ring);
+}
+
+.euro-field[data-invalid='true'] {
+  border-color: var(--error);
+}
+
+.euro-field input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0 var(--space-2) 0 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font-family: var(--font-num);
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  outline: none;
+  appearance: textfield;
+}
+
+.euro-field input::-webkit-inner-spin-button,
+.euro-field input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.euro-unit {
+  color: var(--muted);
+}
+
+.euro-error {
+  color: var(--error);
+  font-size: var(--text-small);
+  word-spacing: var(--word-spacing-small);
+}
+
+.euro-note {
+  color: var(--muted);
+  font-size: var(--text-small);
+  word-spacing: var(--word-spacing-small);
+}
+
+.euro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+}
+
+.euro-form .euro-actions .link-button {
+  margin-left: 0;
+}
+
+.euro-worth {
+  color: var(--muted);
+}
+
+.euro-worth-value {
+  color: var(--fg);
+  font-size: var(--text-figure);
+  font-weight: var(--weight-bold);
+}
+
+.euro-warn {
+  margin-top: var(--space-2);
+  padding: var(--warn-pad);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--fg);
+}
+
+.euro-warn strong {
+  color: var(--warn);
+}
+
+/* After the sentence on a laptop; on their own row on a phone. */
+@media (min-width: 40.0625rem) {
+  .euro-worth .euro-actions {
+    display: inline-flex;
+    vertical-align: middle;
+  }
+}
+
+/* ---------- Buttons and links (DESIGN.md "Buttons, links and inputs") ---------- */
+
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--hit);
+  min-height: var(--hit);
+  margin: 0 0 0 calc(-1 * var(--space-2));
+  padding: var(--link-pad);
+  border: 0;
+  background: none;
+  color: var(--link);
+  font-family: var(--font);
+  font-size: var(--text-note);
+  font-weight: var(--weight-strong);
+  text-decoration: underline;
+  text-decoration-color: var(--muted);
+  text-decoration-thickness: var(--border);
+  text-underline-offset: var(--link-underline-offset);
+  cursor: pointer;
+}
+
+:root[data-view='desk'] .link-button {
+  text-decoration: none;
+}
+
+.button-primary {
+  min-height: var(--hit);
+  padding: var(--button-pad);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-label);
+  font-size: var(--text-switch);
+  font-weight: var(--weight-bold);
+  text-transform: var(--label-case);
+  letter-spacing: var(--label-tracking);
+  cursor: pointer;
 }
 
 /* ---------- Chart ---------- */
@@ -1208,6 +1405,7 @@ code {
   color: var(--warn);
   font-size: var(--text-small);
   font-weight: var(--weight-strong);
+  font-variant-numeric: proportional-nums;
   word-spacing: var(--word-spacing-small);
 }
 
@@ -1218,6 +1416,19 @@ code {
 
 .positions td.weight {
   padding: var(--cell-pad);
+  font-weight: var(--weight-bold);
+}
+
+/* The fund's value on L in euros, under its weight: muted, never signed; bold in the total row. */
+.eur-value {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-small);
+  font-weight: normal;
+  word-spacing: var(--word-spacing-small);
+}
+
+.positions .total .eur-value {
   font-weight: var(--weight-bold);
 }
 
@@ -1253,6 +1464,15 @@ code {
 .chip[data-sign='down'] {
   background: rgb(var(--down-tint) / calc(var(--heat) * var(--tint-strength)));
   color: var(--down);
+}
+
+/* The change in euros, under the return in the same chip, so it takes the chip's sign colour. */
+.chip-eur {
+  display: block;
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--eur-tracking);
+  word-spacing: var(--eur-word-spacing);
 }
 
 .ret-missing .chip {
@@ -1423,8 +1643,9 @@ code {
     grid-row: 1;
     align-self: start;
     display: flex;
-    align-items: center;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
     width: auto;
     min-height: var(--hit);
     font-size: var(--text-body);
