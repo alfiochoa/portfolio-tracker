@@ -1,6 +1,6 @@
-// Allocation: one bar of equities against bonds, then the weight of each asset class.
-// The bar is a thin segmented bar (dataviz: no text inside, a 2px surface gap); the legend under it
-// carries the names and the numbers, and each segment repeats them on hover.
+// Allocation: equities against bonds as two figures and one bar, then the weight of each asset class.
+// The bar is a segmented bar (dataviz: no text inside, a 2px surface gap); the figures over it carry
+// the names and the numbers, and each segment repeats them on hover (docs/DESIGN.md "Allocation").
 import { formatPercent } from '../lib/format.ts';
 import type { Allocation, Kind } from '../lib/portfolio.ts';
 import { h, section } from './dom.ts';
@@ -12,16 +12,19 @@ function share(el: HTMLElement, weight: number): HTMLElement {
   return el;
 }
 
-function legendItem(kind: Kind, weight: number): HTMLElement {
+/** "Equities" over "90.34 %" (beside it in Desk); the text reads "Equities 90.34 %" either way. */
+function splitItem(kind: Kind, weight: number): HTMLElement {
   return h(
     'li',
-    { class: 'legend-item', 'data-kind': kind },
-    h('span', { class: 'swatch', 'aria-hidden': 'true' }),
-    h('span', { class: 'legend-text' }, `${KIND_LABEL[kind]} `, h('span', { class: 'num' }, formatPercent(weight))),
+    { class: 'split-item', 'data-kind': kind },
+    h('span', { class: 'split-word' }, KIND_LABEL[kind]),
+    ' ',
+    h('span', { class: 'split-figure num' }, formatPercent(weight)),
   );
 }
 
-export function renderAllocation(a: Allocation): HTMLElement {
+/** `anchorDate` is the export's date, for the section's aside. */
+export function renderAllocation(a: Allocation, anchorDate: string): HTMLElement {
   const parts: [Kind, number][] = [
     ['equity', a.equities],
     ['bond', a.bonds],
@@ -53,9 +56,9 @@ export function renderAllocation(a: Allocation): HTMLElement {
   return section(
     'allocation',
     'Allocation',
+    `export ${anchorDate}`,
+    h('ul', { class: 'split-legend' }, ...parts.map(([k, w]) => splitItem(k, w))),
     bar,
-    h('ul', { class: 'split-legend' }, ...parts.map(([k, w]) => legendItem(k, w))),
-    h('h3', { class: 'subsection-title' }, 'By asset class'),
     classes,
   );
 }

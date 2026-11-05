@@ -38,6 +38,9 @@ interface Loaded {
   funds: Snapshot['funds'] | null;
 }
 
+/** Each fund's latest NAV date, when the snapshot was read: the positions mark a fund that lags. */
+const fundLatestOf = (prices: PricesOutcome): Record<string, string | null> | null => (prices.kind === 'loaded' ? prices.facts.fundLatest : null);
+
 /** The snapshot and its returns, or why there are none. Never rejects. */
 async function loadPrices(): Promise<Loaded> {
   let text: string | undefined;
@@ -84,8 +87,8 @@ function render({ prices, returns, funds }: Loaded): void {
       { class: 'sections' },
       renderTiles(freshness, shown),
       renderChart(freshness, shown),
-      renderPositions(positions, freshness, shown, shown ? funds : null),
-      renderAllocation(allocationOf(positions)),
+      renderPositions(positions, freshness, shown, shown ? funds : null, shown ? fundLatestOf(prices) : null),
+      renderAllocation(allocationOf(positions), allocation.anchorDate),
     ),
     renderFooter(allocation, freshness),
   );

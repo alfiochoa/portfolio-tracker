@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const SECTIONS = ['Performance', 'Portfolio value, last two months', 'Positions', 'Allocation'];
+const SECTIONS = ['Performance', 'Portfolio value', 'Positions', 'Allocation'];
 
 // The page reads only its own files: anything else is aborted, and fails the test after it.
 // The snapshot is always a fixture (e2e/fixtures/prices.json) or a stand-in, so the numbers are known.
@@ -74,12 +74,39 @@ test.afterEach(() => {
  * Two cells: US 500 over 1d is 110/111 − 1 = −0.90 %; Eurozone Inflation-Linked over 2m is 50/52 − 1 = −3.85 %.
  */
 const TILES = [
-  ['1d', '−0.83 %', '2026-11-02', 'down'],
-  ['5d', '−4.03 %', '2026-10-27', 'down'],
-  ['1w', '−4.03 %', '2026-10-27', 'down'],
-  ['1m', '0.00 %', '2026-10-01', 'flat'],
-  ['2m', '+8.49 %', '2026-09-01', 'up'],
+  ['1d', '−0.83 %', '2026-11-02', 'down', '1 day'],
+  ['5d', '−4.03 %', '2026-10-27', 'down', '5 days'],
+  ['1w', '−4.03 %', '2026-10-27', 'down', '1 week'],
+  ['1m', '0.00 %', '2026-10-01', 'flat', '1 month'],
+  ['2m', '+8.49 %', '2026-09-01', 'up', '2 months'],
 ] as const;
+
+/**
+ * Every value inside its box's padding: each tile's value inside its tile, each return inside its
+ * chip (the text's own box, measured with a Range, so a value that runs past its cell is caught).
+ */
+async function spills(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const pairs: [Element, Element][] = [
+      ...[...document.querySelectorAll('.tile-value')].map((v) => [v, v.closest('.tile')!] as [Element, Element]),
+      ...[...document.querySelectorAll('.positions .chip')].map((c) => [c, c] as [Element, Element]),
+    ];
+    for (const [value, box] of pairs) {
+      const range = document.createRange();
+      range.selectNodeContents(value);
+      const text = range.getBoundingClientRect();
+      const r = box.getBoundingClientRect();
+      const cs = getComputedStyle(box);
+      const left = r.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth);
+      const right = r.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
+      if (text.left < left - 0.5 || text.right > right + 0.5) {
+        out.push(`${box.closest('tr')?.getAttribute('data-fund') ?? 'tile'} ${box.closest('[data-window]')?.getAttribute('data-window') ?? ''}: ${value.textContent} (${Math.round(text.right - right)} px past)`);
+      }
+    }
+    return out;
+  });
+}
 
 test('the tiles and the table show the returns computed by hand from the fixture', async ({ page }, testInfo) => {
   await open(page);
@@ -89,9 +116,9 @@ test('the tiles and the table show the returns computed by hand from the fixture
 
   const performance = page.getByRole('region', { name: 'Performance' });
   await expect(performance.locator('.tile')).toHaveCount(5);
-  for (const [window, value, start, sign] of TILES) {
+  for (const [window, value, start, sign, label] of TILES) {
     const tile = performance.locator(`.tile[data-window="${window}"]`);
-    await expect(tile.locator('.tile-label')).toHaveText(window);
+    await expect(tile.locator('.tile-label')).toHaveText(label);
     await expect(tile.locator('.tile-value')).toHaveText(value);
     await expect(tile.locator('time')).toHaveText(start);
     await expect(tile).toHaveAttribute('data-sign', sign);
@@ -120,13 +147,8 @@ test('the tiles and the table show the returns computed by hand from the fixture
   expect(total).toEqual(TILES.map(([, value]) => value));
   for (const text of await positions.locator('td.ret').allTextContents()) expect(text).toMatch(/^([+−]\d+\.\d\d|0\.00) %$/);
 
-  // Every value fits its own box, the widest (+10.00 %, the bold total) included: nothing runs into its neighbour.
-  const spills = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('td.ret, .tile-value')]
-      .filter((el) => el.scrollWidth > el.clientWidth)
-      .map((el) => `${el.closest('tr')?.dataset.fund ?? 'tile'} ${el.dataset.window ?? ''}: ${el.textContent}`),
-  );
-  expect(spills, 'values wider than their cell').toEqual([]);
+  // Every value fits inside its tile's or chip's padding, the widest (+10.00 %, the bold total) included.
+  expect(await spills(page), 'values wider than their cell').toEqual([]);
 
   // The chart (the 2m index, by hand: V(S_2m) = 0.9217395, so 100 on 2026-09-01 and 108.49 on L)
   // and the sparklines are the next test's.
@@ -218,7 +240,7 @@ test.describe('the chart', () => {
 
   test('draws the 2m index with its labels, and the sparklines', async ({ page }, testInfo) => {
     await open(page);
-    const region = page.getByRole('region', { name: 'Portfolio value, last two months' });
+    const region = page.getByRole('region', { name: 'Portfolio value' });
     await expect(region.locator('.placeholder')).toHaveCount(0);
     const svg = region.getByRole('img');
     await expect(svg).toHaveAttribute('aria-label', 'Portfolio value index, from 100 on 2026-09-01 to 108.49 on 2026-11-03.');
@@ -252,29 +274,29 @@ test.describe('the chart', () => {
       return out;
     });
     expect(clashes, 'overlapping labels').toEqual([]);
-    // Full width on a phone; labels at their own size on every screen.
+    // The card's full inner width (reaching 8 px into its side padding on a Glance phone); labels at their own size on every screen.
     const sizes = await svg.evaluate((el: SVGSVGElement) => ({
       svg: el.getBoundingClientRect().width,
-      section: el.closest('section')!.getBoundingClientRect().width,
+      section: ((sec: HTMLElement) => sec.getBoundingClientRect().width - parseFloat(getComputedStyle(sec).paddingLeft) - parseFloat(getComputedStyle(sec).paddingRight) - 2 * parseFloat(getComputedStyle(el.parentElement!).marginLeft))(el.closest('section')!),
       font: parseFloat(getComputedStyle(el.querySelector('.chart-y text')!).fontSize),
       scale: el.getBoundingClientRect().width / el.viewBox.baseVal.width,
     }));
-    expect(sizes.svg).toBeCloseTo(sizes.section, 0);
+    expect(Math.abs(sizes.svg - sizes.section)).toBeLessThan(1);
     expect(sizes.font * sizes.scale).toBeGreaterThanOrEqual(11.5);
 
-    // A sparkline per fund, 64 × 20, coloured and labelled by its 2m return.
+    // A sparkline per fund, 80 × 24 (60 × 22 below 64rem), labelled by its 2m return; coloured by it in Desk (views.spec.ts), neutral in Glance.
     const positions = page.getByRole('region', { name: 'Positions' });
     await expect(positions.locator('tbody .sparkline')).toHaveCount(8);
     const us500 = positions.locator('tr[data-fund="us500"] .sparkline');
     await expect(us500).toHaveAttribute('aria-label', 'US 500, 2m return: +10.00 %');
     await expect(us500).toHaveAttribute('data-sign', 'up');
-    await expect(us500.locator('path')).toHaveAttribute('data-points', '9'); // its own line keeps 2026-10-26
+    await expect(us500.locator('.spark-line')).toHaveAttribute('data-points', '9'); // its own line keeps 2026-10-26
     const infl = positions.locator('tr[data-fund="euroinfl"] .sparkline');
     await expect(infl).toHaveAttribute('aria-label', 'Eurozone Inflation-Linked Bond, 2m return: −3.85 %');
     await expect(infl).toHaveAttribute('data-sign', 'down');
     for (const box of await positions.locator('tbody .sparkline').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()))) {
-      expect(box.width).toBe(64);
-      expect(box.height).toBe(20);
+      expect(box.width).toBe(testInfo.project.name.startsWith('laptop') ? 80 : 60);
+      expect(box.height).toBe(testInfo.project.name.startsWith('laptop') ? 24 : 22);
     }
     const strokes = await page.evaluate(() => {
       const probe = (value: string) => {
@@ -285,11 +307,12 @@ test.describe('the chart', () => {
         el.remove();
         return c;
       };
-      const stroke = (f: string) => getComputedStyle(document.querySelector(`tr[data-fund="${f}"] .sparkline path`)!).stroke;
-      return { up: probe('var(--up)'), down: probe('var(--down)'), us500: stroke('us500'), infl: stroke('euroinfl') };
+      const stroke = (f: string) => getComputedStyle(document.querySelector(`tr[data-fund="${f}"] .spark-line`)!).stroke;
+      return { up: probe('var(--spark-up)'), down: probe('var(--spark-down)'), muted: probe('var(--muted)'), us500: stroke('us500'), infl: stroke('euroinfl') };
     });
     expect(strokes.us500).toBe(strokes.up);
     expect(strokes.infl).toBe(strokes.down);
+    expect(strokes.us500).toBe(strokes.muted); // Glance's sparklines are neutral
 
     if (process.env.EVIDENCE_DIR) {
       await region.screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-chart.png`) });
@@ -303,7 +326,8 @@ test.describe('the chart', () => {
     await expect(readout).toHaveAttribute('data-state', 'idle');
     await expect(svg.locator('.chart-dot')).toHaveAttribute('visibility', 'hidden');
 
-    // Aim at the third point (2026-10-27): its x in the SVG's units, scaled to the screen.
+    // Aim at the third point (2026-10-27): its x in the SVG's units, scaled to the screen (on screen: the phone's chart starts below the fold).
+    await svg.scrollIntoViewIfNeeded();
     const target = await svg.evaluate((el: SVGSVGElement) => {
       const d = el.querySelector('.chart-line')!.getAttribute('d')!;
       const [x, y] = d.split(/[ML]/).filter(Boolean)[2]!.trim().split(' ').map(Number) as [number, number];
@@ -377,9 +401,9 @@ test.describe('the chart', () => {
     const before = Number(await svg.getAttribute('width'));
     await page.setViewportSize({ width: before > 500 ? 360 : 1280, height: 800 });
     await expect.poll(async () => Number(await svg.getAttribute('width'))).not.toBe(before);
-    const sizes = await svg.evaluate((el: SVGSVGElement) => ({ svg: el.getBoundingClientRect().width, section: el.closest('section')!.getBoundingClientRect().width, drawn: el.viewBox.baseVal.width }));
-    expect(sizes.svg).toBeCloseTo(sizes.section, 0);
-    expect(sizes.drawn).toBeCloseTo(sizes.section, 0);
+    const sizes = await svg.evaluate((el: SVGSVGElement) => ({ svg: el.getBoundingClientRect().width, section: ((sec: HTMLElement) => sec.getBoundingClientRect().width - parseFloat(getComputedStyle(sec).paddingLeft) - parseFloat(getComputedStyle(sec).paddingRight) - 2 * parseFloat(getComputedStyle(el.parentElement!).marginLeft))(el.closest('section')!), drawn: el.viewBox.baseVal.width }));
+    expect(Math.abs(sizes.svg - sizes.section)).toBeLessThan(1);
+    expect(Math.abs(sizes.drawn - sizes.section)).toBeLessThan(1); // drawn at its frame's whole pixels
     await expect(readout).toHaveText('109.40 on 2026-11-02');
     await expect(svg.locator('.chart-dot')).toHaveAttribute('visibility', 'visible');
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
@@ -418,7 +442,7 @@ test.describe('the chart', () => {
       for (const f of Object.values(s.funds)) f.bars = f.bars.filter(([d]) => d === '2026-11-03');
       return JSON.stringify(s);
     });
-    const region = page.getByRole('region', { name: 'Portfolio value, last two months' });
+    const region = page.getByRole('region', { name: 'Portfolio value' });
     await expect(region.locator('.placeholder')).toHaveText(/^Not enough history/);
     await expect(region.locator('svg')).toHaveCount(0);
     await expect(page.locator('tbody .sparkline')).toHaveCount(0);
@@ -441,7 +465,7 @@ test('a window the series does not reach says "not enough history"', async ({ pa
     await expect(page.locator(`.total .ret[data-window="${window}"]`)).toHaveText('not enough history');
   }
   // The chart covers what there is: six dates from 2026-10-27, indexed to 100 there.
-  const chart = page.getByRole('region', { name: 'Portfolio value, last two months' });
+  const chart = page.getByRole('region', { name: 'Portfolio value' });
   await expect(chart.locator('.chart-line')).toHaveAttribute('data-points', '6');
   await expect(chart.getByRole('img')).toHaveAttribute('aria-label', /^Portfolio value index, from 100 on 2026-10-27 to /);
   await expect(chart.locator('.section-note')).toContainText('Prices start on 2026-10-27');
@@ -476,7 +500,7 @@ for (const state of ['missing', 'unreadable'] as const) {
       await expect(performance.locator('.placeholder')).toHaveText(
         "No price snapshot yet. Build one with npm run snapshots; the portfolio's return over 1d · 5d · 1w · 1m · 2m will show here then.",
       );
-      await expect(page.getByRole('region', { name: 'Portfolio value, last two months' }).locator('.placeholder')).toHaveText(
+      await expect(page.getByRole('region', { name: 'Portfolio value' }).locator('.placeholder')).toHaveText(
         'No price snapshot yet. Build one with npm run snapshots, so there is no line to draw.',
       );
       await expect(page.getByRole('region', { name: 'Positions' }).locator('.section-note')).toHaveText(
@@ -484,7 +508,7 @@ for (const state of ['missing', 'unreadable'] as const) {
       );
       await expect(page.locator('footer')).toContainText('Prices: no snapshot yet.');
     }
-    for (const name of ['Performance', 'Portfolio value, last two months']) {
+    for (const name of ['Performance', 'Portfolio value']) {
       const region = page.getByRole('region', { name });
       await expect(region.locator('.placeholder')).toBeVisible();
       await expect(region).not.toContainText('%');
@@ -505,9 +529,14 @@ for (const state of ['missing', 'unreadable'] as const) {
     const allocation = page.getByRole('region', { name: 'Allocation' });
     await expect(allocation.getByText('Equities 90.34 %')).toBeVisible();
     await expect(allocation.getByText('Bonds 9.66 %')).toBeVisible();
-    // As a person reads it, on one line each (innerText follows the layout, textContent does not).
-    const legend = (await allocation.locator('.split-legend').innerText()).split('\n');
-    expect(legend).toEqual(['Equities 90.34 %', 'Bonds 9.66 %']);
+    // Equities at the left, bonds at the right, each word over its figure (Glance; beside it in Desk).
+    expect(await allocation.locator('.split-item').allTextContents()).toEqual(['Equities 90.34 %', 'Bonds 9.66 %']);
+    const [eq, bd] = await allocation.locator('.split-item').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()));
+    expect(eq!.left).toBeLessThan(bd!.left);
+    expect(Math.abs(eq!.top - bd!.top)).toBeLessThan(1);
+    const word = (await allocation.locator('.split-item').first().locator('.split-word').boundingBox())!;
+    const figure = (await allocation.locator('.split-item').first().locator('.split-figure').boundingBox())!;
+    expect(figure.y).toBeGreaterThanOrEqual(word.y + word.height - 1);
     await expect(allocation.locator('.class-row')).toHaveCount(8);
     // Nothing wider than the screen.
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -534,6 +563,20 @@ test('a fund shows its full name on hover and on tap', async ({ page }, testInfo
   }
   await button.click();
   await expect(longest.locator('.fund-full')).toBeHidden();
+
+  // As the badge's detail: Escape closes it (focus back on the name), a press inside keeps it, one outside closes it.
+  await button.click();
+  await expect(longest.locator('.fund-full')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(longest.locator('.fund-full')).toBeHidden();
+  await expect(button).toHaveAttribute('aria-expanded', 'false');
+  await expect(button).toBeFocused();
+  await button.click();
+  await longest.locator('.fund-full').click();
+  await expect(longest.locator('.fund-full')).toBeVisible();
+  await page.locator('h1').click();
+  await expect(longest.locator('.fund-full')).toBeHidden();
+  await expect(button).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('the full name opens from the keyboard, and data-theme overrides the system theme', async ({ page }) => {
@@ -551,7 +594,7 @@ test('the full name opens from the keyboard, and data-theme overrides the system
   for (const forced of ['light', 'dark']) {
     await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), forced);
     const forcedBg = await bg();
-    expect(forcedBg).toBe(forced === 'dark' ? 'rgb(26, 26, 25)' : 'rgb(252, 252, 251)');
+    expect(forcedBg).toBe(forced === 'dark' ? 'rgb(14, 16, 19)' : 'rgb(242, 242, 238)'); // Glance's --bg, DESIGN.md
   }
   await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
   expect(await bg()).toBe(system);
@@ -658,6 +701,13 @@ test.describe('the freshness badge', () => {
     await expect(detail.locator('li', { hasText: 'Japan Stock: ' })).toHaveText('Japan Stock: 2026-11-02 (behind)');
     await expect(detail.locator('li', { hasText: 'US 500: ' })).toHaveText('US 500: 2026-11-03');
     await expect(page.locator('.tile[data-window="1d"] time')).toHaveText('2026-10-30'); // the numbers show, up to L
+    // The fund that lags is marked in its row with the date it reaches, and no other fund is.
+    await expect(page.locator('.lag-chip')).toHaveCount(1);
+    await expect(page.locator('tr[data-fund="japan"] .lag-chip')).toHaveText('NAV to 2026-11-02');
+    await expect(page.locator('tr[data-fund="japan"] .lag-chip')).toBeVisible();
+    if (process.env.EVIDENCE_DIR) {
+      await page.locator('tr[data-fund="japan"]').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-lagging-row.png`) });
+    }
     if (process.env.EVIDENCE_DIR) {
       await page.locator('header').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-badge-partial.png`) });
     }
@@ -665,6 +715,7 @@ test.describe('the freshness badge', () => {
 
   test('is PARTIAL on the fixture as it is, naming the date the series dropped', async ({ page }) => {
     await open(page);
+    await expect(page.locator('.lag-chip')).toHaveCount(0); // every fund reaches L: no fund is marked
     await page.locator('.badge').click();
     await expect(page.locator('.badge-detail')).toContainText("PARTIAL: 2026-10-26 is missing for some funds, so the portfolio's line and returns skip it.");
   });
@@ -701,12 +752,27 @@ test.describe('the freshness badge', () => {
       await expect(page.locator('.badge-detail li').first()).toHaveText(
         snapshot === 'http500' ? 'ERROR: the snapshot answered HTTP 500' : /^ERROR: .*JSON/,
       );
-      for (const name of ['Performance', 'Portfolio value, last two months']) {
+      for (const name of ['Performance', 'Portfolio value']) {
         await expect(page.getByRole('region', { name }).locator('.placeholder')).toContainText('could not be read');
       }
       await expect(page.getByRole('region', { name: 'Positions' }).locator('.section-note')).toContainText('could not be read');
       await expect(page.getByRole('region', { name: 'Allocation' }).getByText('Equities 90.34 %')).toBeVisible();
       await expect(page.locator('footer')).toContainText('Prices: the snapshot could not be read');
+      // The table's column heads stay readable with the return and sparkline cells empty (T-010's "2ast"): no two overlap.
+      const heads = await page.locator('.positions thead th').evaluateAll((els) =>
+        els.map((e) => {
+          const range = document.createRange();
+          range.selectNodeContents(e);
+          // On a phone the head is visually hidden (the rows are cards that label their own cells).
+          return { text: e.textContent, r: range.getBoundingClientRect(), shown: e.closest('thead')!.getBoundingClientRect().width > 2 };
+        }),
+      );
+      const overlaps: string[] = [];
+      for (const a of heads) for (const b of heads) {
+        if (a === b || !a.shown || !b.shown || a.text! >= b.text!) continue;
+        if (a.r.left < b.r.right && b.r.left < a.r.right && a.r.top < b.r.bottom && b.r.top < a.r.bottom) overlaps.push(`${a.text} / ${b.text}`);
+      }
+      expect(overlaps, 'overlapping column heads').toEqual([]);
       if (process.env.EVIDENCE_DIR) {
         await page.locator('header').screenshot({ path: path.join(process.env.EVIDENCE_DIR, `${testInfo.project.name}-badge-error-${snapshot}.png`) });
       }
@@ -780,7 +846,7 @@ test('the allocation shows before the snapshot answers, and the performance sect
   await expect(badge).toHaveAttribute('data-tone', 'none');
   await expect(page.getByRole('region', { name: 'Allocation' }).getByText('Equities 90.34 %')).toBeVisible();
   await expect(page.locator('tbody tr')).toHaveCount(8);
-  for (const name of ['Performance', 'Portfolio value, last two months']) {
+  for (const name of ['Performance', 'Portfolio value']) {
     await expect(page.getByRole('region', { name }).locator('.placeholder')).toHaveText('Loading prices…');
   }
   await expect(page.locator('footer')).toContainText('Prices: loading the snapshot…');
@@ -810,7 +876,7 @@ test('a snapshot that does not answer in 15 s is ERROR, saying so', async ({ pag
   await expect(badge).toHaveAttribute('data-tone', 'error');
   await badge.click();
   await expect(page.locator('.badge-detail li').first()).toHaveText('ERROR: the snapshot did not answer in 15 s');
-  for (const name of ['Performance', 'Portfolio value, last two months']) {
+  for (const name of ['Performance', 'Portfolio value']) {
     await expect(page.getByRole('region', { name }).locator('.placeholder')).toContainText('could not be read');
   }
   await expect(page.getByRole('region', { name: 'Positions' }).locator('.section-note')).toContainText('could not be read');
