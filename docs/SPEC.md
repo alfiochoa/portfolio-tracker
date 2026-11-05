@@ -39,11 +39,13 @@ Equities 90.34 %, bonds 9.66 %. The exact weights are the export's floating-poin
 One page, sections top to bottom. It works at phone width (360 px) and on a laptop; sections stack on the phone.
 
 1. **Header**: the name, and the **freshness badge**: `NAV as of <date> · snapshot <time> · <STATE>` with the source on hover or tap. A one-line note under it: "Funds price once a day; the NAV of a day is published the next working day."
-2. **Performance tiles**: five tiles, 1d · 5d · 1w · 1m · 2m, each the portfolio return for the window as a signed percentage with two decimals, coloured by sign, with the window's start date under it.
+2. **Performance**: the 1d return as one big number with its start date (yesterday's move: the question the page answers first), and the other four windows, 5d · 1w · 1m · 2m, as cells under it, each the portfolio return for the window as a signed percentage with two decimals, tinted by sign and by the size of the move, with the window's start date. In the Desk view, five equal tiles in a row.
 3. **Portfolio chart**: the portfolio's value over the last two months as a line, indexed to 100 at the start of the window, with the latest value and date at the end; hovering or tapping shows the date and value.
-4. **Positions**: one row per fund, sorted by weight: asset class, fund (short name; the full name on hover or tap), weight, the five window returns, and a small sparkline of the last two months. A total row with the portfolio's five returns.
+4. **Positions**: one row per fund, sorted by weight: asset class, fund (short name; the full name on hover or tap), weight, the five window returns, and a small sparkline of the last two months. A total row with the portfolio's five returns. In the Glance view the rows are a grid of cards, each tinted by the size of the fund's 1d move, so the eye finds which fund moved before reading a number; in the Desk view, one dense table.
 5. **Allocation**: a bar of equities against bonds with the percentages, and the breakdown by asset class.
 6. **Footer**: source and licence notes, "not investment advice", the anchor date of the allocation and how to update it.
+
+**Views.** A tab control in the header switches between two looks of the same page and data: **Glance** (the default; rounded cards, one big number, tinted cells, blue up and orange down) and **Desk** (the market-desk sibling: dark panels, monospaced figures, every number in one table). The choice is kept in the browser and used on the next visit. Both views have both themes and work at both widths; `docs/DESIGN.md` says what differs between them (tokens, type, the performance section and the positions) and everything else is shared.
 
 **The euro total (M2, optional).** Under the tiles, one line. With nothing stored it is a single link, "Show amounts in euros", which opens a one-field form (whole euros) and a note that the amount stays in this browser and is never sent anywhere. With a total stored, the line says what the portfolio is worth on `L` and from what ("Worth 25 312 € on 2026-11-10, from the 25 000 € you entered for 2026-11-03; assumes nothing added or withdrawn since"), with "Change" and "Forget". Then each tile carries the window's change in euros under the percentage, each fund row its value on `L` beside its weight and the change in euros under each return, and the total row the same for the whole. The chart, the sparklines and the allocation stay in percentages.
 
@@ -102,7 +104,7 @@ Primary: **Yahoo Finance's chart endpoint** (`query1.finance.yahoo.com/v8/financ
 
 Second source (M2): **Vanguard's own product pages** (`vanguard.co.uk/professional/product/fund/<equity|bond>/<id>/<ISIN>`), which list the last ten official NAVs of each share class. The snapshot overlays them on Yahoo's bars: on a date both have, Vanguard's value wins (the two have agreed on 72 of 72 fund-dates so far; a difference is printed by the script); a date Yahoo lacks inside those ten is filled. A filled date stays filled after it leaves Vanguard's window, and a NAV Vanguard published once is not lost when its page later omits it (seen around publication time): on any date from this run's first Yahoo bar on that Yahoo lacks, inside their span or after it, the previous file's value is carried forward (Yahoo still wins wherever it has a value, Vanguard over both on its dates; a date older than Yahoo's first bar falls off with the six-month window). So the newest ten days are official and complete, the older history is Yahoo's, a hole once filled never reopens, and a fund's latest date never steps back. The badge's detail and the footer name both: "Vanguard (official) + Yahoo Finance (unofficial)". When one source fails for a fund, the other's bars are used and the failure is recorded in the file (the run is `partial` when Yahoo's history could not be refreshed for a fund; a failed Vanguard fetch alone is a `warning`); when both fail for every fund, the previous file is written back with `state: failed`.
 
-Fallback (to confirm in M1): **Twelve Data**, which lists the same share classes (`0P00011HBK` etc., Frankfurt). Its pricing page puts "Mutual funds NAV" on the Pro plan, so the free key Alfredo offers probably does not serve them; one 1-credit probe decides. If it does not, Twelve Data is dropped from this project and the key stays unused. The key, if any, lives in `.env` (gitignored) and is only ever read by the snapshot script.
+**Twelve Data** was the planned fallback (it lists the same share classes, Frankfurt) and is dropped from version 1 (2026-11-05): no key was given and none is needed, since both sources above are keyless; its pricing page puts "Mutual funds NAV" on a paid plan anyway. If a key ever appears in `.env` (gitignored, read only by the snapshot script), one 1-credit probe decides whether it serves these funds.
 
 Verification of the source: for one fund and one date, the NAV in the snapshot must equal the NAV Vanguard publishes for that share class and date (the task that wires the source records which date and which page).
 
@@ -134,7 +136,7 @@ Acceptance:
 - One NAV per fund in the snapshot matches Vanguard's published NAV for that date (the report names the dates and pages).
 - The tiles, the chart, the positions table and the total row show the values the exact definitions give, and a script in the repo recomputes them from the two data files so the verifier can compare.
 - The badge states behave as the table says (verified by faking the current time and by removing a date from a fund).
-- The design system from the chosen direction is applied to every section, both themes, 360 px and 1280 px.
+- The design system from the chosen direction is applied to every section, in both views (Glance and the Desk tab), both themes, 360 px and 1280 px.
 - Alfredo has chosen a visual direction from the designer's options; `docs/DESIGN.md` and the `design-pass` skill record it.
 - The Twelve Data probe is done and its result recorded in `docs/DECISIONS.md` (or, if no key was given, that is recorded instead).
 
@@ -142,7 +144,7 @@ Acceptance:
 
 The snapshot rebuilt every working day without Alfredo, a new export imported in one command, and the optional euro total.
 
-Acceptance (the automation half depends on a decision of Alfredo's: a GitHub repository and Pages like market-desk, or a scheduled job on his own machine):
+Acceptance (Alfredo chose GitHub Actions and Pages on 2026-11-05: the repository `alfiochoa/portfolio-tracker`, public, the page at `alfiochoa.github.io/portfolio-tracker`):
 - The snapshot combines Vanguard's product pages (official, the last ten NAVs per fund) with Yahoo Finance as "Data sources" says: Vanguard wins on a shared date, Yahoo's holes inside those ten days are filled (2026-10-26 is the case to show), each fund's file entry says which dates came from Vanguard, the badge's detail and the footer name both sources, and a failure of either source for a fund leaves the other's bars in use with the failure recorded.
 - The snapshot is rebuilt automatically each working day after the NAVs are published, and the page shows the new "as of" without anyone touching it.
 - A new `distribucion_agregada_cartera.xlsx` dropped at the repo root and `npm run import` changes the allocation and the anchor date; the README says so in three lines.

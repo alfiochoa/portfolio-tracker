@@ -2,6 +2,18 @@
 
 Newest first. One entry per decision: what was chosen, over what, and why. Keep entries short.
 
+## 2026-11-05: the look is Glance, with a Desk tab (Alfredo; the architect read "tab" as a view switch)
+
+Alfredo chose Glance from D-001's three options (the designer's and the architect's recommendation) and asked for "a tab for Desk". Read as a control in the header that switches the same page and data between the two looks, Glance by default, remembered by the browser; not a second page and not a theme. Desk is bounded to its own tokens and type plus the dense performance row and positions table, so T-007 builds one page with two token sets. He did not answer the 5d/1w question, so both windows stay. SPEC "The screen", "Views"; `docs/DESIGN.md` (D-002) carries the details.
+
+## 2026-11-05: the daily refresh runs on GitHub Actions and the page on GitHub Pages; the repository is public, created by the architect with Alfredo's word (Alfredo; architect)
+
+Home A of the two built in T-012. Alfredo told the architect to create the repository itself; name `portfolio-tracker`, public so Pages is free (the repository holds the weights and never an amount, the export and `.env` are gitignored), under his GitHub account, which `gh` on this machine is signed in to. The schedule is weekdays 08:15 UTC. No key and no AI are involved in the refresh, so it costs nothing of any plan. Home B (cron) stays in the repository unused. The Actions bot commits the snapshot to `main`, so the architect pulls before every push (ARCHITECTURE "Keeping it current").
+
+## 2026-11-05: Twelve Data is dropped from version 1: no key was given and none is needed (architect)
+
+Asked twice; Alfredo's answer was that no key should be needed, and it is not: Vanguard and Yahoo are keyless. T-008 is closed without the probe, which the spec's M1 acceptance allows when no key was given. A key in `.env` later would revive the probe.
+
 ## 2026-11-05: the typed euro total is anchored on its date and follows the prices; fund values are drifted shares (architect, for T-013)
 
 The spec's M2 line said only that Alfredo may type the portfolio's total and the tiles and table then show euro amounts. Three readings were possible: a static number he retypes each day (stale within a day, and the page would have to say which day it meant); amounts as `E × r` (off by a second-order term, and the fund changes would not sum to the portfolio's); or the total as the value on the latest NAV date at the time, carried by the value index from then on. The third was chosen: `E = E₀ · V(L)/V(D)`, each fund worth its share after the drift since the anchor, a window's change `E − E·V(S)/V(L)`, so values sum to `E` and changes sum to the portfolio's exactly, and the only assumption, nothing added or withdrawn since `D`, is printed beside the amount. SPEC "Exact definitions", "Euro amounts". Reversible in one module (`src/lib/euros.ts`).
