@@ -9,7 +9,7 @@ import { parse } from 'yaml';
 
 const root = new URL('../', import.meta.url);
 
-type Step = { name?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, string> };
+type Step = { id?: string; name?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, string> };
 type Job = { needs?: string | string[]; if?: string; permissions?: Record<string, string>; steps: Step[]; outputs?: Record<string, string> };
 type Workflow = {
   on: Record<string, unknown>;
@@ -70,6 +70,49 @@ describe('the refresh workflow (.github/workflows/refresh.yml)', () => {
     expect(script).toMatch(/git commit -m "[^"]*\$LATEST/);
     expect(script).toContain('git push');
     expect(script).not.toMatch(/--force|-f\b/);
+  });
+
+  describe('the "did the data change?" step, run on the real snapshot in a scratch git repository', () => {
+    const step = wf.jobs.build!.steps.find((s) => s.id === 'diff')!.run!;
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(path.join(tmpdir(), 'diffstep-'));
+      mkdirSync(path.join(dir, 'public', 'data'), { recursive: true });
+      copyFileSync(new URL('public/data/prices.json', root), path.join(dir, 'public/data/prices.json'));
+      const g = (...a: string[]) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: dir });
+      g('init', '-q');
+      g('add', '.');
+      g('commit', '-qm', 'base');
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+    const run = (edit: (json: string) => string) => {
+      const file = path.join(dir, 'public/data/prices.json');
+      writeFileSync(file, edit(readFileSync(file, 'utf8')));
+      const out = path.join(dir, 'out.txt');
+      writeFileSync(out, '');
+      const r = spawnSync('bash', ['-e', '-c', step], { cwd: dir, env: { ...process.env, GITHUB_OUTPUT: out }, encoding: 'utf8' });
+      expect(r.status, r.stderr).toBe(0);
+      return Object.fromEntries(readFileSync(out, 'utf8').trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)));
+    };
+
+    it('an untouched file is not a change; the output names the latest NAV date(s) and the state', () => {
+      const o = run((j) => j);
+      expect(o.changed).toBe('false');
+      expect(o.latest).toMatch(/^\d{4}-\d{2}-\d{2}( \/ \d{4}-\d{2}-\d{2})*$/);
+      expect(o.state).toMatch(/^(ok|partial|failed)$/);
+    });
+
+    it('a run that only moves generatedAt is not a change', () => {
+      expect(run((j) => j.replace(/"generatedAt": "[^"]*"/, '"generatedAt": "2099-01-01T00:00:00Z"')).changed).toBe('false');
+    });
+
+    it('a new bar is a change', () => {
+      expect(run((j) => j.replace(/(\["\d{4}-\d{2}-\d{2}",[\d.]+\])\n(\s*\]\n\s*\})/, '$1,\n["2099-01-01",1.0]\n$2')).changed).toBe('true');
+    });
+
+    // Seen live (T-012 verification): two real runs minutes apart, same bars, differ in every fund's
+    // fetchedAt, so the step says changed=true and the workflow would commit on every weekday.
+    it.todo('a run that only moves the fetchedAt stamps (same bars) is not a change');
   });
 
   it('every step either runs a command or uses a pinned action', () => {
