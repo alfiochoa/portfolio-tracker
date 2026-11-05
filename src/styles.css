@@ -143,6 +143,7 @@
   --text-figure: 1.25rem;
   --text-small: 0.71875rem;
   --text-micro: 0.65625rem; /* a cell's window label on a phone */
+  --word-spacing-small: 0.14em; /* Manrope's space nearly vanishes at 11.5 px: "US equities" read as one word */
   --text-switch: var(--text-note);
   --text-tag: 0.8125rem; /* the chart's end label: --text-label + 1px */
   --text-lead: var(--text-tile);
@@ -335,6 +336,7 @@
   --text-figure: 0.75rem;
   --text-small: 0.6875rem;
   --text-micro: 0.625rem;
+  --word-spacing-small: 0;
   --text-switch: var(--text-label);
   --text-tag: 0.6875rem;
   --text-lead: 0.75rem;
@@ -764,6 +766,7 @@ code {
   font-weight: normal;
   text-transform: var(--label-case);
   letter-spacing: var(--label-tracking);
+  word-spacing: var(--word-spacing-small);
   white-space: nowrap;
 }
 
@@ -879,6 +882,7 @@ code {
 .tile-start {
   color: var(--muted-on-tint);
   font-size: var(--text-small);
+  word-spacing: var(--word-spacing-small);
 }
 
 .tile-hero {
@@ -911,6 +915,7 @@ code {
 
 .tile-hero .tile-start {
   font-size: var(--text-note);
+  word-spacing: normal;
 }
 
 .tile-hero .since {
@@ -1182,6 +1187,7 @@ code {
   display: block;
   color: var(--muted);
   font-size: var(--text-small);
+  word-spacing: var(--word-spacing-small);
 }
 
 .fund-full {
@@ -1202,6 +1208,7 @@ code {
   color: var(--warn);
   font-size: var(--text-small);
   font-weight: var(--weight-strong);
+  word-spacing: var(--word-spacing-small);
 }
 
 .positions .weight {
@@ -1251,6 +1258,7 @@ code {
 .ret-missing .chip {
   font-size: var(--text-small);
   font-weight: normal;
+  word-spacing: var(--word-spacing-small);
   white-space: normal;
 }
 

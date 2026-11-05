@@ -129,7 +129,7 @@ Every number (returns, weights, euros, dates, the badge's text in Desk, chart la
 
 ### Scale
 
-Role tokens, so a component names what the text is, not how big it is. Phone values apply at ≤ 40rem.
+Role tokens, so a component names what the text is, not how big it is. Phone values apply at ≤ 40rem. `--word-spacing-small` goes with `--text-small` wherever that text has words (a fund's class line, a full name, a tile's date, the lagging chip, "not enough history" in a cell) and on the section asides; figures and chart labels have no spaces, so it changes nothing there.
 
 | Token | Used for | Glance | Desk |
 |---|---|---|---|
@@ -143,7 +143,7 @@ Role tokens, so a component names what the text is, not how big it is. Phone val
 | `--text-tile` | a window's value in a cell or tile | `1.125rem` (18), 700; phone `1.0625rem` (17) | `1.375rem` (22), 600; phone `1rem` (16) |
 | `--text-hero` | the 1-day number | `4.25rem` (68), 700, `-0.035em`, proportional figures; phone `3.5rem` (56) | not used: Desk's 1d is a tile |
 | `--text-figure` | allocation's equities/bonds figures; the euro "worth" amount | `1.25rem` (20), 700 | `0.75rem` (12), 600 |
-| `--text-small` | a start date, a euro amount under a return, a cell's label on a phone | `0.71875rem` (11.5); phone label `0.65625rem` (10.5) | `0.6875rem` (11); phone `0.625rem` (10) |
+| `--text-small` | a start date, a euro amount under a return, a cell's label on a phone | `0.71875rem` (11.5); phone label `0.65625rem` (10.5); with `--word-spacing-small` `0.14em`, because Manrope's space renders as wide as a letter gap at this size and "US equities" read as one word (0.14em is the smallest value that gives a visible gap at 360 and 1280) | `0.6875rem` (11); phone `0.625rem` (10); `--word-spacing-small` `0` (Plex's space reads) |
 | `--leading` | line height | `1.5` | `1.45` |
 | `--weight-strong` / `--weight-bold` | | `600` / `700` | `600` / `600` |
 
