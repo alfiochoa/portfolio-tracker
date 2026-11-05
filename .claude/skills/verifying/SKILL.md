@@ -15,7 +15,7 @@ Look at the result; a green run is not enough on its own.
 | 768×1024 | a tablet, sections start sitting side by side |
 | 1280×800 | his laptop |
 
-Both themes (dark and light; the page follows `prefers-color-scheme` and a toggle once the design lands). One language, English.
+Both themes (dark and light; the page follows `prefers-color-scheme`, there is no toggle) and, once T-007 lands, both views (Glance, the default, and Desk, switched by the control in the header and remembered as `localStorage['portfolio-tracker.view']`). One language, English.
 
 The numbers are the product. Anything `docs/SPEC.md` calls exact (weights, the five window returns, the value index, the badge state) is checked against the data files, not only against the screen: `node scripts/recompute.ts` prints what the page should show from `data/portfolio.json` and `public/data/prices.json`; for at least one window, do the arithmetic yourself from the bars in `prices.json` (a few lines of Python with literal numbers) and compare all three. A page that is pretty and off by one trading day is a fail.
 
