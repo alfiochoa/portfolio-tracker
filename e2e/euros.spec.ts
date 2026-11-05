@@ -283,3 +283,33 @@ test('a total of 250 000 € fits every tile, row and phone card, in both views'
   expect(await overflow(page)).toBeLessThanOrEqual(0);
   await evidence(page.locator('#positions'), testInfo.project.name, 'big-desk-positions');
 });
+
+for (const value of [
+  'not json',
+  'null',
+  '[]',
+  '{"euros":25000}',
+  '{"euros":0,"asOf":"2026-11-03"}',
+  '{"euros":-4,"asOf":"2026-11-03"}',
+  '{"euros":25.5,"asOf":"2026-11-03"}',
+  '{"euros":"25000","asOf":"2026-11-03"}',
+  '{"euros":25000,"asOf":"tomorrow"}',
+]) {
+  test(`a stored ${value} is treated as absent and removed`, async ({ page }) => {
+    await page.addInitScript(([k, v]) => localStorage.setItem(k!, v!), [KEY, value]);
+    await open(page);
+    await expect(page.locator('.euro')).toHaveAttribute('data-state', 'none');
+    await expect(page.locator('.tile-eur, .chip-eur, .eur-value')).toHaveCount(0);
+    expect(await stored(page)).toBeNull();
+  });
+}
+
+test('an amount too large to keep exactly is refused with the message, and nothing is stored', async ({ page }) => {
+  await open(page);
+  const line = page.locator('.euro');
+  await line.getByRole('button', { name: 'Show amounts in euros' }).click();
+  await page.getByLabel("Your portfolio's total value today, in whole euros").fill('99999999999999999999');
+  await line.getByRole('button', { name: 'Show amounts' }).click();
+  await expect(line).toContainText('Type a whole number of euros, like 25000.');
+  expect(await stored(page)).toBeNull();
+});
