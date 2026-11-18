@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-11-16T18:28:54Z",
+  "generatedAt": "2026-11-18T17:13:53Z",
   "source": {"name":"Vanguard (official) + Yahoo Finance (unofficial)","kind":"vanguard+yahoo"},
   "state": "ok",
   "warning": "Vanguard failed for 8 of 8 funds; their newest days come from Yahoo and the previous file: us500: the page gives 2 different latest NAVs; europe: the page gives 2 different latest NAVs; emerging: the page gives 2 different latest NAVs; smallcap: the page gives 2 different latest NAVs; japan: the page gives 2 different latest NAVs; eurogov: the page gives 2 different latest NAVs; eurocorp: the page gives 2 different latest NAVs; euroinfl: the page gives 2 different latest NAVs",
   "funds": {
     "us500": {
       "currency": "EUR",
-      "fetchedAt": "2026-11-16T18:28:54Z",
+      "fetchedAt": "2026-11-18T17:13:53Z",
       "vanguard": {"error":"the page gives 2 different latest NAVs"},
       "bars": [
         ["2026-05-18",559.7896],
@@ -138,12 +138,13 @@
         ["2026-11-10",595.2681],
         ["2026-11-11",606.4809],
         ["2026-11-12",606.0056],
-        ["2026-11-13",605.7681]
+        ["2026-11-13",605.7681],
+        ["2026-11-16",595.3391]
       ]
     },
     "europe": {
       "currency": "EUR",
-      "fetchedAt": "2026-11-16T18:28:54Z",
+      "fetchedAt": "2026-11-18T17:13:53Z",
       "vanguard": {"error":"the page gives 2 different latest NAVs"},
       "bars": [
         ["2026-05-18",270.7909],
@@ -275,12 +276,13 @@
         ["2026-11-10",295.5457],
         ["2026-11-11",297.8489],
         ["2026-11-12",298.2008],
-        ["2026-11-13",298.2884]
+        ["2026-11-13",298.2884],
+        ["2026-11-16",297.4596]
       ]
     },
     "emerging": {
       "currency": "EUR",
-      "fetchedAt": "2026-11-16T18:28:54Z",
+      "fetchedAt": "2026-11-18T17:13:53Z",
       "vanguard": {"error":"the page gives 2 different latest NAVs"},
       "bars": [
         ["2026-05-18",256.7076],
@@ -412,12 +414,13 @@
         ["2026-11-10",252.3288],
         ["2026-11-11",258.2428],
         ["2026-11-12",255.4401],
-        ["2026-11-13",255.5597]
+        ["2026-11-13",255.5597],
+        ["2026-11-16",249.0092]
       ]
     },
     "smallcap": {
       "currency": "EUR",
-      "fetchedAt": "2026-11-16T18:28:54Z",
+      "fetchedAt": "2026-11-18T17:13:53Z",
       "vanguard": {"error":"the page gives 2 different latest NAVs"},
       "bars": [
         ["2026-05-18",330.8951],
@@ -549,12 +552,13 @@
         ["2026-11-10",355.6361],
         ["2026-11-11",359.3862],
         ["2026-11-12",356.4927],
-        ["2026-11-13",357.032]
+        ["2026-11-13",357.032],
+        ["2026-11-16",353.1585]
       ]
     },
     "japan": {
       "currency": "EUR",
-      "fetchedAt": "2026-11-16T18:28:54Z",
+      "fetchedAt": "2026-11-18T17:13:53Z",
       "vanguard": {"error":"the page gives 2 different latest NAVs"},
       "bars": [
         ["2026-05-18",292.6628],
@@ -686,12 +690,13 @@
         ["2026-11-10",310.4812],
         ["2026-11-11",313.2966],
         ["2026-11-12",314.3969],
-        ["2026-11-13",315.7524]
+        ["2026-11-13",315.7524],
+        ["2026-11-16",313.2411]
       ]
     },
     "eurogov": {
       "currency": "EUR",
-      "fetchedAt": "2026-11-16T18:28:54Z",
+      "fetchedAt": "2026-11-18T17:13:53Z",
       "vanguard": {"error":"the page gives 2 different latest NAVs"},
       "bars": [
         ["2026-05-18",113.5496],
@@ -823,12 +828,13 @@
         ["2026-11-10",112.8664],
         ["2026-11-11",112.6532],
         ["2026-11-12",112.5049],
-        ["2026-11-13",112.1083]
+        ["2026-11-13",112.1083],
+        ["2026-11-16",112.1022]
       ]
     },
     "eurocorp": {
       "currency": "EUR",
-      "fetchedAt": "2026-11-16T18:28:54Z",
+      "fetchedAt": "2026-11-18T17:13:53Z",
       "vanguard": {"error":"the page gives 2 different latest NAVs"},
       "bars": [
         ["2026-05-18",115.997],
@@ -960,12 +966,13 @@
         ["2026-11-10",116.1533],
         ["2026-11-11",116.0538],
         ["2026-11-12",115.9844],
-        ["2026-11-13",115.7579]
+        ["2026-11-13",115.7579],
+        ["2026-11-16",115.7717]
       ]
     },
     "euroinfl": {
       "currency": "EUR",
-      "fetchedAt": "2026-11-16T18:28:54Z",
+      "fetchedAt": "2026-11-18T17:13:53Z",
       "vanguard": {"error":"the page gives 2 different latest NAVs"},
       "bars": [
         ["2026-05-18",133.2683],
@@ -1097,7 +1104,8 @@
         ["2026-11-10",129.6431],
         ["2026-11-11",129.8182],
         ["2026-11-12",129.7841],
-        ["2026-11-13",129.4127]
+        ["2026-11-13",129.4127],
+        ["2026-11-16",129.2815]
       ]
     }
   }
